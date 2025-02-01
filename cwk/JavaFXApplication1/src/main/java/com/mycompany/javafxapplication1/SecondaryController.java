@@ -40,6 +40,28 @@ public class SecondaryController {
     private TextField customTextField;
     
     @FXML
+    private Button fileOperationsBtn; 
+    
+    @FXML
+    private void switchToFileOperations() {
+        Stage fileOperationsStage = new Stage();
+        Stage currentStage = (Stage) fileOperationsBtn.getScene().getWindow();
+        try {
+            FXMLLoader loader = new FXMLLoader();
+            loader.setLocation(getClass().getResource("file_operations.fxml"));
+            Parent root = loader.load();
+            Scene scene = new Scene(root, 640, 480);
+            fileOperationsStage.setScene(scene);
+            fileOperationsStage.setTitle("File Operations");
+            fileOperationsStage.show();
+            currentStage.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    
+    @FXML
     private void RefreshBtnHandler(ActionEvent event){
         Stage primaryStage = (Stage) customTextField.getScene().getWindow();
         customTextField.setText((String)primaryStage.getUserData());
