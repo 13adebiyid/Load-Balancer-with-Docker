@@ -1,5 +1,6 @@
 package com.mycompany.javafxapplication1;
 
+import com.mycompany.javafxapplication1.LoadBalancer;
 import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
@@ -28,7 +29,7 @@ public class FileOperationsController {
 
     @FXML
     private TextField fileTextField;
-
+    
     @FXML
     private void uploadBtnHandler(ActionEvent event) {
         Stage primaryStage = (Stage) uploadBtn.getScene().getWindow();
@@ -40,13 +41,16 @@ public class FileOperationsController {
             fileTextField.setText(selectedFile.getAbsolutePath());
             System.out.println("File selected for upload: " + selectedFile.getAbsolutePath());
 
-            // Simulate file upload (replace with actual logic)
-            dialogue("File Upload", "File uploaded successfully: " + selectedFile.getName());
+            // Send the file path to the load balancer
+            LoadBalancer loadBalancer = new LoadBalancer();
+            String server = loadBalancer.handleFileUpload(selectedFile.getAbsolutePath(), "RR");  // Use Round Robin
+            dialogue("File Upload", "File uploaded to server: " + server);
         }
     }
 
-    @FXML
-    private void downloadBtnHandler(ActionEvent event) {
+
+        @FXML
+        private void downloadBtnHandler(ActionEvent event) {
         Stage primaryStage = (Stage) downloadBtn.getScene().getWindow();
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save File");
@@ -56,8 +60,10 @@ public class FileOperationsController {
             fileTextField.setText(selectedFile.getAbsolutePath());
             System.out.println("File selected for download: " + selectedFile.getAbsolutePath());
 
-            // Simulate file download (replace with actual logic)
-            dialogue("File Download", "File downloaded successfully: " + selectedFile.getName());
+            // Send the file path to the load balancer
+            LoadBalancer loadBalancer = new LoadBalancer();
+            String server = loadBalancer.handleFileDownload(selectedFile.getAbsolutePath(), "RR");  // Use Round Robin
+            dialogue("File Download", "File downloaded from server: " + server);
         }
     }
 
@@ -78,6 +84,7 @@ public class FileOperationsController {
             e.printStackTrace();
         }
     }
+    
 
     private void dialogue(String headerMsg, String contentMsg) {
         Stage secondaryStage = new Stage();
