@@ -1,34 +1,61 @@
 package com.mycompany.javafxapplication1;
 
-import com.mycompany.javafxapplication1.LoadBalancer;
-import java.io.File;
-import java.io.IOException;
-import java.util.Optional;
+import java.io.*;
+import java.util.*;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 public class FileOperationsController {
-
     @FXML
     private Button uploadBtn;
-
     @FXML
     private Button downloadBtn;
-
     @FXML
     private Button backBtn;
-
     @FXML
     private TextField fileTextField;
+    @FXML
+    private ProgressBar progressBar;
+    @FXML
+    private ComboBox<String> algorithmComboBox;
+    
+    private Map<String, List<String>> fileContainerMap;
+    private LoadBalancer loadBalancer;
+    private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+    private LoadBalancerClient loadBalancerClient;
+    
+    
+    @FXML
+    public void initialize() {
+        // Initialize the load balancer with storage containers
+        loadBalancerClient = new LoadBalancerClient("localhost", 8080);
+        fileContainerMap = new HashMap<>();
+        loadBalancer = new LoadBalancer();
+        
+        // Add storage containers (you'll need to configure these based on your Docker setup)
+        for (int i = 1; i <= 4; i++) {
+            FileStorageContainer container = new FileStorageContainer(
+                    "container-" + i,
+                    "/storage/container" + i
+            );
+            loadBalancer.addContainer(container);
+        }
+        
+        // Set up the algorithm selection dropdown
+        algorithmComboBox.getItems().addAll("RoundRobin", "ShortestJob", "Priority");
+        algorithmComboBox.setValue("RoundRobin");
+        
+        // Listen for algorithm changes
+        algorithmComboBox.setOnAction(event ->
+                loadBalancer.setAlgorithm(algorithmComboBox.getValue())
+        );
+    }
     
     @FXML
     private void uploadBtnHandler(ActionEvent event) {
@@ -36,37 +63,139 @@ public class FileOperationsController {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Select File to Upload");
         File selectedFile = fileChooser.showOpenDialog(primaryStage);
-
+        
         if (selectedFile != null) {
             fileTextField.setText(selectedFile.getAbsolutePath());
             System.out.println("File selected for upload: " + selectedFile.getAbsolutePath());
-
-            // Send the file path to the load balancer
-            LoadBalancer loadBalancer = new LoadBalancer();
-            String server = loadBalancer.handleFileUpload(selectedFile.getAbsolutePath(), "RR");  // Use Round Robin
-            dialogue("File Upload", "File uploaded to server: " + server);
+            
+            // Generate a unique ID for this file
+            String fileId = UUID.randomUUID().toString();
+            
+            try {
+                uploadFileInChunks(selectedFile, fileId);
+                dialogue("File Upload", "File uploaded successfully across containers");
+            } catch (IOException e) {
+                dialogue("Upload Error", "Failed to upload file: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
-
-
-        @FXML
-        private void downloadBtnHandler(ActionEvent event) {
+    
+    /**
+     * Store file chunk location information when uploading
+     * Add this to your existing upload method
+     */
+    private void recordChunkLocation(String fileId, int chunkNumber, String containerId) {
+        fileContainerMap.computeIfAbsent(fileId, k -> new ArrayList<>())
+                .add(containerId);
+    }
+    
+    /**
+     * Get the fileId for a given file path
+     * This is a simple implementation - you might want to store this mapping in your database
+     */
+    private String getFileIdForPath(String path) {
+        // For now, just return the path as the ID
+        // In a real implementation, you'd look this up in your database
+        return path;
+    }
+    
+    private void uploadFileInChunks(File file, String fileId) throws IOException {
+        FileInputStream fis = new FileInputStream(file);
+        byte[] buffer = new byte[CHUNK_SIZE];
+        int chunkNumber = 0;
+        int bytesRead;
+        
+        while ((bytesRead = fis.read(buffer)) != -1) {
+            byte[] chunk = bytesRead < buffer.length ?
+                    new byte[bytesRead] : buffer;
+            
+            if (bytesRead < buffer.length) {
+                System.arraycopy(buffer, 0, chunk, 0, bytesRead);
+            }
+            
+            try {
+                String containerId = loadBalancerClient.uploadFileChunk(
+                        fileId, chunkNumber, chunk
+                );
+                // Record where this chunk was stored
+                recordChunkLocation(fileId, chunkNumber, containerId);
+                
+                System.out.println("Chunk " + chunkNumber + " stored in container " + containerId);
+            } catch (ClassNotFoundException e) {
+                throw new IOException("Error uploading chunk", e);
+            }
+            
+            chunkNumber++;
+            updateProgress(chunkNumber * buffer.length / (double) file.length());
+        }
+        
+        fis.close();
+    }
+    
+    @FXML
+    private void downloadBtnHandler(ActionEvent event) {
         Stage primaryStage = (Stage) downloadBtn.getScene().getWindow();
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save File");
-        File selectedFile = fileChooser.showSaveDialog(primaryStage);
-
-        if (selectedFile != null) {
-            fileTextField.setText(selectedFile.getAbsolutePath());
-            System.out.println("File selected for download: " + selectedFile.getAbsolutePath());
-
-            // Send the file path to the load balancer
-            LoadBalancer loadBalancer = new LoadBalancer();
-            String server = loadBalancer.handleFileDownload(selectedFile.getAbsolutePath(), "RR");  // Use Round Robin
-            dialogue("File Download", "File downloaded from server: " + server);
+        File saveFile = fileChooser.showSaveDialog(primaryStage);
+        
+        if (saveFile != null) {
+            fileTextField.setText(saveFile.getAbsolutePath());
+            System.out.println("File selected for download: " + saveFile.getAbsolutePath());
+            
+            try {
+                // Get the fileId from our stored map
+                String fileId = getFileIdForPath(saveFile.getAbsolutePath());
+                if (fileId == null) {
+                    dialogue("Error", "File not found in the system");
+                    return;
+                }
+                
+                downloadAndAssembleFile(fileId, saveFile);
+                dialogue("File Download", "File downloaded successfully");
+                
+            } catch (Exception e) {
+                dialogue("Download Error", "Failed to download file: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
-
+    
+    /**
+     * Downloads all chunks of a file and reassembles them
+     * @param fileId The unique identifier of the file
+     * @param outputFile The file to save the assembled data to
+     */
+    private void downloadAndAssembleFile(String fileId, File outputFile)
+            throws IOException, ClassNotFoundException {
+        
+        // Get the number of chunks for this file
+        List<String> containerList = fileContainerMap.get(fileId);
+        if (containerList == null) {
+            throw new IOException("No chunk information found for file");
+        }
+        
+        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+            for (int chunkNumber = 0; chunkNumber < containerList.size(); chunkNumber++) {
+                // Download each chunk
+                byte[] chunkData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
+                
+                // Write the chunk to the output file
+                fos.write(chunkData);
+                
+                // Update progress bar
+                updateProgress((chunkNumber + 1.0) / containerList.size());
+            }
+            
+            fos.flush();
+        }
+    }
+    
+    private void updateProgress(double progress) {
+        progressBar.setProgress(progress);
+    }
+    
     @FXML
     private void backBtnHandler(ActionEvent event) {
         Stage secondaryStage = new Stage();
@@ -85,7 +214,6 @@ public class FileOperationsController {
         }
     }
     
-
     private void dialogue(String headerMsg, String contentMsg) {
         Stage secondaryStage = new Stage();
         Alert alert = new Alert(Alert.AlertType.INFORMATION);

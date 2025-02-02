@@ -1,65 +1,186 @@
 package com.mycompany.javafxapplication1;
 
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
-
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.Socket;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.logging.Logger;
 
+/**
+ * LoadBalancer class that distributes work across multiple file storage containers
+ * @author student
+ */
 public class LoadBalancer {
-    private List<String> servers;
-    private int currentIndex = 0;
-    private Random random = new Random();
-
-    public LoadBalancer(List<String> servers) {
-        this.servers = servers;
+    private List<FileStorageContainer> containers;
+    private HashMap<String, Boolean> containerStatus;
+    private HashMap<String, Integer> containerPriorities;
+    private int currentContainerIndex;
+    private String currentAlgorithm;
+    private Random random;
+    
+    /**
+     * Constructor - initializes the load balancer
+     */
+    public LoadBalancer() {
+        containers = new ArrayList<>();
+        containerStatus = new HashMap<>();
+        containerPriorities = new HashMap<>();
+        currentContainerIndex = 0;
+        currentAlgorithm = "RoundRobin";
+        random = new Random();
     }
-
-    // Round Robin algorithm
-    public String getNextServerRoundRobin() {
-        String server = servers.get(currentIndex);
-        currentIndex = (currentIndex + 1) % servers.size();
-        return server;
+    
+    /**
+     * Add a new container to the load balancer
+     * @param container The storage container to add
+     */
+    public void addContainer(FileStorageContainer container) {
+        containers.add(container);
+        containerStatus.put(container.getId(), true);
+        containerPriorities.put(container.getId(), 1);
+        System.out.println("Added container: " + container.getId());
     }
-
-    // Random algorithm
-    public String getNextServerRandom() {
-        return servers.get(random.nextInt(servers.size()));
-    }
-
-    // Send a chunk to a server (example using SSH/Socket)
-    public void sendChunk(byte[] chunk, String server) throws IOException {
-        try (Socket socket = new Socket(server, 22); // Use port 22 for SSH
-             OutputStream outputStream = socket.getOutputStream()) {
-            outputStream.write(chunk);
-            System.out.println("Chunk sent to server: " + server);
+    
+    /**
+     * Set which scheduling algorithm to use
+     * @param algorithm The name of the algorithm (RoundRobin, ShortestJob, Priority)
+     */
+    public void setAlgorithm(String algorithm) {
+        if (algorithm.equals("RoundRobin") || 
+            algorithm.equals("ShortestJob") || 
+            algorithm.equals("Priority")) {
+            currentAlgorithm = algorithm;
+            System.out.println("Changed to algorithm: " + algorithm);
         }
     }
-
-    public static void main(String[] args) {
-        // List of file storage servers (matches docker-compose service names)
-        List<String> servers = List.of(
-            "comp20081-files-container1",
-            "comp20081-files-container2",
-            "comp20081-files-container3",
-            "comp20081-files-container4"
-        );
-
-        LoadBalancer loadBalancer = new LoadBalancer(servers);
-
-        // Example: Distribute a test chunk
+    
+    /**
+     * Get the next container based on the current scheduling algorithm
+     * @return The selected FileStorageContainer
+     */
+    public FileStorageContainer getNextContainer() {
+        // Check if any containers are available
+        if (containers.isEmpty()) {
+            return null;
+        }
+        
+        FileStorageContainer selected = null;
+        
+        // Use the current algorithm to select container
+        if (currentAlgorithm.equals("RoundRobin")) {
+            selected = roundRobinSelect();
+        }
+        else if (currentAlgorithm.equals("ShortestJob")) {
+            selected = shortestJobSelect();
+        }
+        else if (currentAlgorithm.equals("Priority")) {
+            selected = prioritySelect();
+        }
+        
+        return selected;
+    }
+    
+    /**
+     * Round Robin selection algorithm
+     * @return The next container in the rotation
+     */
+    private FileStorageContainer roundRobinSelect() {
+        // Reset index if we've reached the end
+        if (currentContainerIndex >= containers.size()) {
+            currentContainerIndex = 0;
+        }
+        
+        // Get next container and increment index
+        FileStorageContainer container = containers.get(currentContainerIndex);
+        currentContainerIndex++;
+        
+        return container;
+    }
+    
+    /**
+     * Shortest Job Next selection algorithm
+     * @return The container with fewest active connections
+     */
+    private FileStorageContainer shortestJobSelect() {
+        FileStorageContainer selected = containers.get(0);
+        int minConnections = selected.getActiveConnections();
+        
+        // Find container with least connections
+        for (FileStorageContainer container : containers) {
+            if (container.getActiveConnections() < minConnections) {
+                selected = container;
+                minConnections = container.getActiveConnections();
+            }
+        }
+        
+        return selected;
+    }
+    
+    /**
+     * Priority-based selection algorithm
+     * @return Container based on priority level
+     */
+    private FileStorageContainer prioritySelect() {
+        FileStorageContainer selected = containers.get(0);
+        int highestPriority = containerPriorities.get(selected.getId());
+        
+        // Find container with highest priority
+        for (FileStorageContainer container : containers) {
+            int priority = containerPriorities.get(container.getId());
+            if (priority > highestPriority) {
+                selected = container;
+                highestPriority = priority;
+            }
+        }
+        
+        return selected;
+    }
+    
+    /**
+     * Set the priority level for a container
+     * @param containerId The container's ID
+     * @param priority The priority level to set
+     */
+    public void setContainerPriority(String containerId, int priority) {
+        if (containerPriorities.containsKey(containerId)) {
+            containerPriorities.put(containerId, priority);
+            System.out.println("Set priority " + priority + " for container " + containerId);
+        }
+    }
+    
+    /**
+     * Simulate network delay based on traffic level
+     * @param trafficLevel LOW, MEDIUM, or HIGH
+     */
+    public void simulateDelay(String trafficLevel) {
+        // Base delay 30-90 seconds
+        int baseDelay = 30000 + random.nextInt(60000);
+        
+        // Adjust for traffic
+        int finalDelay = baseDelay;
+        if (trafficLevel.equals("HIGH")) {
+            finalDelay = (int)(baseDelay * 2.0);
+        }
+        else if (trafficLevel.equals("LOW")) {
+            finalDelay = (int)(baseDelay * 0.5);
+        }
+        
         try {
-            byte[] chunk = "Test chunk".getBytes();
-            String targetServer = loadBalancer.getNextServerRoundRobin();
-            loadBalancer.sendChunk(chunk, targetServer);
-        } catch (IOException e) {
-            e.printStackTrace();
+            Thread.sleep(finalDelay);
+        } catch (InterruptedException e) {
+            System.out.println("Delay interrupted");
+        }
+    }
+    
+    /**
+     * Update the health status of a container
+     * @param containerId The container's ID
+     * @param isHealthy The container's health status
+     */
+    public void updateContainerHealth(String containerId, boolean isHealthy) {
+        if (containerStatus.containsKey(containerId)) {
+            containerStatus.put(containerId, isHealthy);
+            System.out.println("Container " + containerId + " health: " + isHealthy);
         }
     }
 }

@@ -4,13 +4,15 @@
     <groupId>com.mycompany</groupId>
     <artifactId>JavaFXApplication1</artifactId>
     <version>1.0-SNAPSHOT</version>
+    
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
     </properties>
+    
     <dependencies>
-        <!-- Keep your existing dependencies (JavaFX, SQLite, etc.) -->
+        <!-- Existing JavaFX dependencies -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
@@ -27,15 +29,17 @@
             <version>3.40.0.0</version>
         </dependency>
     </dependencies>
+    
     <build>
         <plugins>
-            <!-- Plugin 1: Shade Plugin (for GUI JAR) -->
+            <!-- GUI Application JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.4.1</version>
                 <executions>
                     <execution>
+                        <id>gui-application</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
@@ -44,19 +48,17 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <!-- Main class for the GUI -->
                                         <Main-Class>com.mycompany.javafxapplication1.App</Main-Class>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
-                            <!-- Output name for the GUI JAR -->
                             <finalName>gui-app</finalName>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- Plugin 2: JAR Plugin (for Load Balancer JAR) -->
+            <!-- Load Balancer JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -69,22 +71,23 @@
                             <goal>jar</goal>
                         </goals>
                         <configuration>
-                            <!-- Output directory for the load balancer JAR -->
-                            <outputDirectory>${project.build.directory}</outputDirectory>
-                            <!-- Classifier to distinguish the JAR -->
                             <classifier>loadbalancer</classifier>
                             <archive>
                                 <manifest>
-                                    <!-- Main class for the load balancer -->
-                                    <mainClass>com.mycompany.loadbalancer.LoadBalancer</mainClass>
+                                    <mainClass>com.mycompany.javafxapplication1.LoadBalancerMain</mainClass>
                                 </manifest>
                             </archive>
+                            <includes>
+                                <include>com/mycompany/javafxapplication1/LoadBalancer.class</include>
+                                <include>com/mycompany/javafxapplication1/FileStorageContainer.class</include>
+                                <include>com/mycompany/javafxapplication1/LoadBalancerMain.class</include>
+                            </includes>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- Other plugins (JavaFX, compiler) -->
+            <!-- Other existing plugins -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
