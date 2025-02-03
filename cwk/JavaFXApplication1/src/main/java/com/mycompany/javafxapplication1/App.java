@@ -19,16 +19,21 @@ public class App extends Application {
     public void start(Stage stage) throws IOException {
         Stage secondaryStage = new Stage();
         DB myObj = new DB();
-        myObj.log("-------- Simple Tutorial on how to make JDBC connection to SQLite DB ------------");
-        myObj.log("\n---------- Drop table ----------");
+        myObj.log("-------- Initializing database connection ------------");
+        
         try {
-            myObj.delTable(myObj.getTableName());
-        } catch (ClassNotFoundException ex) {
-            Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        myObj.log("\n---------- Create table ----------");
+        // Initialize database - only creates tables if they don't exist
+        myObj.initializeDatabase();
+        
+        myObj.log("Database initialization completed successfully");
+        
+    } catch (ClassNotFoundException ex) {
+        Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+        throw new RuntimeException("Failed to initialize database", ex);
+    }
+
         try {
-            myObj.createTable(myObj.getTableName());
+            myObj.createTables();
         } catch (ClassNotFoundException ex) {
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
         }

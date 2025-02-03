@@ -47,10 +47,12 @@ public class DB {
     private String saltValue;
     
     /**
-     * @brief constructor - generates the salt if it doesn't exists or load it from the file .salt
+     * Constructor - initializes the database and creates required tables
+     * Also handles salt generation/loading for password encryption
      */
     DB() {
         try {
+            // Handle salt initialization (your existing code)
             File fp = new File(".salt");
             if (!fp.exists()) {
                 saltValue = this.getSaltvalue(30);
@@ -63,34 +65,133 @@ public class DB {
                     saltValue = myReader.nextLine();
                 }
             }
+            
+            // Initialize database tables
+            createTables();
+            
         } catch (IOException e) {
+            System.err.println("Error handling salt file: " + e.getMessage());
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            System.err.println("Error creating database tables: " + e.getMessage());
             e.printStackTrace();
         }
     }
     
     /**
-     * @brief create a new table
-     * @param tableName name of type String
+     * Creates all required database tables for the distributed file storage system.
+     * This includes tables for:
+     * - Users: Storing user authentication information
+     * - Files: Tracking metadata about stored files
+     * - File_chunks: Managing the distribution of file chunks across containers
+     * - Encryption_keys: Storing encryption keys for secure file storage
      */
-    public void createTable(String tableName) throws ClassNotFoundException {
+    public void createTables() throws ClassNotFoundException {
         try {
-            // create a database connection
+            // Establish database connection
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
-            statement.executeUpdate("create table if not exists " + tableName + "(id integer primary key autoincrement, name string, password string)");
+            
+            // Create users table (maintaining existing functionality)
+            statement.executeUpdate("create table if not exists " + dataBaseTableName +
+                    "(id integer primary key autoincrement, name string, password string)");
+            
+            // Create files table to track overall file information
+            // This stores metadata about each file in the system
+            statement.executeUpdate(
+                    "create table if not exists files (" +
+                            "file_id text primary key," +           // Unique identifier for each file
+                            "file_name text not null," +            // Original name of the file
+                            "owner_user text not null," +           // User who owns this file
+                            "total_size integer not null," +        // Total size in bytes
+                            "total_chunks integer not null," +      // Number of chunks file is split into
+                            "is_shared integer default 0" +         // Whether file is shared (0=false, 1=true)
+                            ")"
+            );
+            
+            // Create file_chunks table to track chunk distribution
+            // This maps each chunk to its container location
+            statement.executeUpdate(
+                    "create table if not exists file_chunks (" +
+                            "file_id text," +                       // Links to files table
+                            "chunk_number integer," +               // Sequence number of chunk
+                            "container_id text not null," +         // Which container stores this chunk
+                            "primary key (file_id, chunk_number)," +
+                            "foreign key (file_id) references files(file_id)" +
+                            ")"
+            );
+            
+            // Create encryption_keys table for secure storage
+            // This stores encryption keys for each file chunk
+            statement.executeUpdate(
+                    "create table if not exists encryption_keys (" +
+                            "file_id text," +                       // Links to files table
+                            "chunk_number integer," +               // Which chunk this key is for
+                            "key_string text not null," +           // The encryption key itself
+                            "primary key (file_id, chunk_number)," +
+                            "foreign key (file_id) references files(file_id)" +
+                            ")"
+            );
+            
+            System.out.println("Database tables initialized successfully");
             
         } catch (SQLException ex) {
-            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
+                    "Failed to create database tables", ex);
+            throw new RuntimeException("Database initialization failed", ex);
         } finally {
             try {
                 if (connection != null) {
                     connection.close();
                 }
             } catch (SQLException e) {
-                // connection close failed.
-                System.err.println(e.getMessage());
+                System.err.println("Error closing database connection: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Initializes the database for first use or validates existing structure.
+     * This method ensures database persistence while maintaining data integrity.
+     * It creates tables only if they don't exist and validates the database structure.
+     */
+    public void initializeDatabase() throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            // Check if this is a first-time initialization
+            ResultSet tables = connection.getMetaData().getTables(null, null, "files", null);
+            boolean needsInitialization = !tables.next();
+            
+            if (needsInitialization) {
+                System.out.println("First-time database initialization - creating tables");
+                createTables();
+                
+                // Add default admin user if this is first initialization
+                try {
+                    addDataToDB("admin", "admin123");
+                    System.out.println("Created default admin account");
+                } catch (InvalidKeySpecException e) {
+                    System.err.println("Failed to create default admin account: " + e.getMessage());
+                }
+            }
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
+                    "Database initialization failed", ex);
+            throw new RuntimeException("Database initialization failed", ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("Error closing database connection: " + e.getMessage());
             }
         }
     }
@@ -132,8 +233,8 @@ public class DB {
             connection = DriverManager.getConnection(fileName);
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
-//            System.out.println("Adding User: " + user + ", Password: " + password);
-statement.executeUpdate("insert into " + dataBaseTableName + " (name, password) values('" + user + "','" + generateSecurePassword(password) + "')");
+            System.out.println("Adding User: " + user + ", Password: " + password);
+            statement.executeUpdate("insert into " + dataBaseTableName + " (name, password) values('" + user + "','" + generateSecurePassword(password) + "')");
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
         } finally {

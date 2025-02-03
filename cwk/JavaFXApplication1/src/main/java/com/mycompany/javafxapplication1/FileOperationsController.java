@@ -2,6 +2,8 @@ package com.mycompany.javafxapplication1;
 
 import java.io.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -27,20 +29,27 @@ public class FileOperationsController {
     private LoadBalancer loadBalancer;
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     private LoadBalancerClient loadBalancerClient;
+    private Map<String, String> filePathToIdMap;
     
     
     @FXML
     public void initialize() {
+        // Initialize our tracking maps
+        filePathToIdMap = new HashMap<>();
+        fileContainerMap = new HashMap<>();
+        
         // Initialize your components
         fileTextField.setText("No file selected");
         progressBar.setProgress(0.0);
         
         // Initialize the load balancer with storage containers
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
-        fileContainerMap = new HashMap<>();
         loadBalancer = new LoadBalancer();
         
-        // Add storage containers (you'll need to configure these based on your Docker setup)
+        // Create storage directories in user's home directory
+        String baseStoragePath = "cloudStorage";
+        
+        // Add storage containers
         for (int i = 1; i <= 4; i++) {
             FileStorageContainer container = new FileStorageContainer(
                     "container-" + i,
@@ -49,6 +58,19 @@ public class FileOperationsController {
             loadBalancer.addContainer(container);
         }
         
+    }
+    
+    public String getFileIdForPath(String path) {
+        // First try our session mapping
+        String fileId = filePathToIdMap.get(path);
+        
+        if (fileId != null) {
+            System.out.println("Found file ID in session: " + fileId + " for path: " + path);
+            return fileId;
+        }
+        
+        System.out.println("Could not find file ID for path: " + path);
+        return null;
     }
     
     @FXML
@@ -67,9 +89,25 @@ public class FileOperationsController {
             String fileId = UUID.randomUUID().toString();
             System.out.println("Generated file ID: " + fileId);
             
+            // Storing the mapping between file path and ID
+            filePathToIdMap.put(selectedFile.getAbsolutePath(), fileId);
+            
             try {
                 System.out.println("Starting file upload process...");
+                
+                // Create file metadata
+                FileMetadata metadata = new FileMetadata(fileId, selectedFile.getName(), "currentUser", selectedFile.length());
+                
                 uploadFileInChunks(selectedFile, fileId);
+                
+                // Store metadata in database
+                DB db = new DB();
+                try {
+                    db.saveFileMetadata(metadata);
+                } catch (ClassNotFoundException ex) {
+                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                
                 dialogue("File Upload", "File uploaded successfully across containers");
             } catch (IOException e) {
                 dialogue("Upload Error", "Failed to upload file: " + e.getMessage());
@@ -89,15 +127,7 @@ public class FileOperationsController {
                 .add(containerId);
     }
     
-    /**
-     * Get the fileId for a given file path
-     * This is a simple implementation - you might want to store this mapping in your database
-     */
-    private String getFileIdForPath(String path) {
-        // For now, just return the path as the ID
-        // In a real implementation, you'd look this up in your database
-        return path;
-    }
+    
     
     private void uploadFileInChunks(File file, String fileId) throws IOException {
         FileInputStream fis = new FileInputStream(file);

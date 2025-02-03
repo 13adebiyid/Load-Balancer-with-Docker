@@ -25,17 +25,27 @@ public class FileStorageContainer {
      */
     public FileStorageContainer(String containerId, String storagePath) {
         this.containerId = containerId;
-        this.storagePath = storagePath;
+        this.storagePath = new File(System.getProperty("user.home"), storagePath).getAbsolutePath();
         this.activeConnections = new AtomicInteger(0);
         this.random = new Random();
         
         // Create the storage directory if it doesn't exist
-        File storage = new File(storagePath);
+        File storage = new File(this.storagePath);
         if (!storage.exists()) {
-            storage.mkdirs();
+            boolean created = storage.mkdirs();
+            if (!created) {
+                System.err.println("Failed to create storage directory: " + this.storagePath);
+            } else {
+                System.out.println("Created storage directory: " + this.storagePath);
+            }
         }
         
-        System.out.println("Created storage container: " + containerId);
+        // Ensuring directory is writable
+        if (!storage.canWrite()) {
+            System.err.println("Warning: Storage directory is not writable: " + this.storagePath);
+        }
+        
+        System.out.println("Initialized storage container: " + containerId + " at path: " + this.storagePath);
     }
     
     /**

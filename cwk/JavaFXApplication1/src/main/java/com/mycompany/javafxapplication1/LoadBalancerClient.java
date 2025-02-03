@@ -2,6 +2,7 @@ package com.mycompany.javafxapplication1;
 
 import java.io.*;
 import java.net.*;
+import java.util.Random;
 
 /**
  * Client class for communicating with the load balancer
@@ -12,6 +13,7 @@ public class LoadBalancerClient {
     private int port;
     private boolean isConnected;
     private static final int CONNECTION_TIMEOUT = 5000; // 5 seconds timeout
+    private Random random = new Random();
     
     /**
      * Constructor - initializes the client with server details
@@ -26,6 +28,27 @@ public class LoadBalancerClient {
         testConnection();
     }
     
+    // Simulate network traffic conditions
+    private double getTrafficMultiplier() {
+        // Randomly choose traffic condition (LOW: 0.5, MEDIUM: 1.0, HIGH: 2.0)
+        double[] multipliers = {0.5, 1.0, 2.0};
+        int trafficLevel = random.nextInt(3);
+        return multipliers[trafficLevel];
+    }
+    
+    // Implement artificial delay as per requirements
+    private void simulateNetworkDelay() throws InterruptedException {
+        // Base delay between 30-90 seconds as specified
+        int baseDelay = 30000 + random.nextInt(60000);
+        
+        // Adjust delay based on traffic conditions
+        double trafficMultiplier = getTrafficMultiplier();
+        int actualDelay = (int)(baseDelay * trafficMultiplier);
+        
+        System.out.println("Simulating network delay: " + actualDelay/1000 + " seconds");
+        Thread.sleep(actualDelay);
+    }
+    
     /**
      * Uploads a file chunk to a storage container
      * @param fileId Unique identifier for the file
@@ -37,39 +60,49 @@ public class LoadBalancerClient {
             throws IOException, ClassNotFoundException {
         
         if (!testConnection()) {
-            throw new IOException("Cannot connect to load balancer server at " + 
-                                host + ":" + port + ". Is the server running?");
+            throw new IOException("Cannot connect to load balancer server at " + host + ":" + port + ". Please check server is running");
         }
         
         try (Socket socket = new Socket()) {
             // Set connection timeout
             socket.connect(new InetSocketAddress(host, port), CONNECTION_TIMEOUT);
             
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-            
-            // Create and send operation request
-            FileOperation operation = new FileOperation(
-                "UPLOAD", fileId, chunkNumber, data.length
-            );
-            out.writeObject(operation);
-            
-            // Get assigned container ID
-            String containerId = (String) in.readObject();
-            
-            // Send the actual file data
-            out.write(data);
-            out.flush();
-            
-            // Wait for confirmation
-            boolean success = in.readBoolean();
-            if (!success) {
-                throw new IOException("Upload failed - server reported failure");
+            try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+                
+                // Create and send operation request
+                FileOperation operation = new FileOperation(
+                    "UPLOAD", fileId, chunkNumber, data.length
+                );
+                out.writeObject(operation);
+                out.flush(); 
+                
+                // Get assigned container ID
+                String containerId = (String) in.readObject();
+                System.out.println("Server assigned container: " + containerId);
+                
+                // Send the actual file data
+                out.write(data);
+                out.flush();
+                
+                // Wait for confirmation
+                boolean success = in.readBoolean();
+                if (!success) {
+                    throw new IOException("Upload failed - server reported failure");
+                }
+                
+                // Simulate network delay as per requirements
+                try {
+                    simulateNetworkDelay();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Network delay simulation interrupted", e);
+                }
+                
+                System.out.println("Successfully uploaded chunk " + chunkNumber + 
+                                 " to container " + containerId);
+                return containerId;
             }
-            
-            System.out.println("Successfully uploaded chunk " + chunkNumber + 
-                             " to container " + containerId);
-            return containerId;
             
         } catch (SocketTimeoutException e) {
             isConnected = false;
