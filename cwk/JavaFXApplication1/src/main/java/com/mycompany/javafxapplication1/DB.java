@@ -197,6 +197,65 @@ public class DB {
     }
     
     /**
+     * Retrieves all files from the database
+     * @return List of FileMetadata objects
+     */
+    public List<FileMetadata> getAllFiles() throws ClassNotFoundException {
+        List<FileMetadata> files = new ArrayList<>();
+        
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            ResultSet rs = statement.executeQuery(
+                "SELECT * FROM files"
+            );
+            
+            while (rs.next()) {
+                FileMetadata metadata = new FileMetadata(
+                    rs.getString("file_id"),
+                    rs.getString("file_name"),
+                    rs.getString("owner_user"),
+                    rs.getLong("total_size")
+                );
+                metadata.setShared(rs.getInt("is_shared") == 1);
+                
+                // Get chunk locations for this file
+                ResultSet chunksRs = statement.executeQuery(
+                    "SELECT chunk_number, container_id FROM file_chunks " +
+                    "WHERE file_id = '" + metadata.getFileId() + "' " +
+                    "ORDER BY chunk_number"
+                );
+                
+                while (chunksRs.next()) {
+                    metadata.addChunkLocation(
+                        chunksRs.getInt("chunk_number"),
+                        chunksRs.getString("container_id")
+                    );
+                }
+                
+                files.add(metadata);
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("Error retrieving files: " + e.getMessage());
+            throw new RuntimeException("Database error", e);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("Error closing connection: " + e.getMessage());
+            }
+        }
+        
+        return files;
+    }
+    
+    /**
      * @brief delete table
      * @param tableName of type String
      */

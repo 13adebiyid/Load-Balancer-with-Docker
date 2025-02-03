@@ -42,5 +42,17 @@
             <Button fx:id="backBtn" text="Back to Main Menu" onAction="#backBtnHandler"
                     GridPane.columnSpan="2" GridPane.rowIndex="3" />
         </GridPane>
+        
+        <!-- Files Table -->
+        <TableView fx:id="filesTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="fileNameColumn" text="File Name" />
+                <TableColumn fx:id="ownerColumn" text="Owner" />
+                <TableColumn fx:id="sizeColumn" text="Size" />
+            </columns>
+            <VBox.margin>
+                <Insets top="10.0" />
+            </VBox.margin>
+        </TableView>
     </children>
 </VBox>
