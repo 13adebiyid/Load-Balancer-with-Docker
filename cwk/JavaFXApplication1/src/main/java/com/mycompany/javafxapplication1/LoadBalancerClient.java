@@ -57,61 +57,58 @@ public class LoadBalancerClient {
      * @return The ID of the container that stored the chunk
      */
     public String uploadFileChunk(String fileId, int chunkNumber, byte[] data) 
-            throws IOException, ClassNotFoundException {
+        throws IOException, ClassNotFoundException {
+    
+    if (!testConnection()) {
+        throw new IOException("Cannot connect to load balancer server at " + host + ":" + port + 
+                            ". Please check server is running");
+    }
+    
+    try (Socket socket = new Socket()) {
+        socket.connect(new InetSocketAddress(host, port), CONNECTION_TIMEOUT);
         
-        if (!testConnection()) {
-            throw new IOException("Cannot connect to load balancer server at " + host + ":" + port + ". Please check server is running");
-        }
-        
-        try (Socket socket = new Socket()) {
-            // Set connection timeout
-            socket.connect(new InetSocketAddress(host, port), CONNECTION_TIMEOUT);
+        try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             
-            try (ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-                
-                // Create and send operation request
-                FileOperation operation = new FileOperation(
-                    "UPLOAD", fileId, chunkNumber, data.length
-                );
-                out.writeObject(operation);
-                out.flush(); 
-                
-                // Get assigned container ID
-                String containerId = (String) in.readObject();
-                System.out.println("Server assigned container: " + containerId);
-                
-                // Send the actual file data
-                out.write(data);
-                out.flush();
-                
-                // Wait for confirmation
-                boolean success = in.readBoolean();
-                if (!success) {
-                    throw new IOException("Upload failed - server reported failure");
-                }
-                
-                // Simulate network delay as per requirements
-                try {
-                    simulateNetworkDelay();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("Network delay simulation interrupted", e);
-                }
-                
-                System.out.println("Successfully uploaded chunk " + chunkNumber + 
-                                 " to container " + containerId);
-                return containerId;
+            // Create and send operation request
+            FileOperation operation = new FileOperation(
+                "UPLOAD", fileId, chunkNumber, data.length
+            );
+            out.writeObject(operation);
+            out.flush();
+            
+            // Get assigned container ID
+            String containerId = (String) in.readObject();
+            System.out.println("Server assigned container: " + containerId);
+            
+            // Send the actual file data
+            out.write(data);
+            out.flush();
+            
+            // Wait for confirmation
+            boolean success = in.readBoolean();
+            if (!success) {
+                throw new IOException("Upload failed - server reported failure");
             }
             
-        } catch (SocketTimeoutException e) {
-            isConnected = false;
-            throw new IOException("Connection timed out while uploading chunk", e);
-        } catch (IOException e) {
-            isConnected = false;
-            throw new IOException("Error during file chunk upload: " + e.getMessage(), e);
+            // Simulate network delay according to coursework requirements
+            int baseDelay = 30000 + new Random().nextInt(60000); // 30-90 seconds
+            System.out.println("Simulating network delay: " + (baseDelay/1000) + " seconds");
+            Thread.sleep(baseDelay);
+            
+            System.out.println("Successfully uploaded chunk " + chunkNumber + 
+                             " to container " + containerId);
+            return containerId;
         }
+            
+    } catch (IOException e) {
+        isConnected = false;
+        throw new IOException("Error during file chunk upload: " + e.getMessage(), e);
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException("Network delay simulation interrupted", e);
     }
+}
     
     /**
      * Downloads a file chunk from a storage container
@@ -119,12 +116,12 @@ public class LoadBalancerClient {
      * @param chunkNumber The chunk sequence number
      * @return The file chunk data
      */
-    public byte[] downloadFileChunk(String fileId, int chunkNumber) 
+    public byte[] downloadFileChunk(String fileId, int chunkNumber)
             throws IOException, ClassNotFoundException {
         
         if (!testConnection()) {
-            throw new IOException("Cannot connect to load balancer server at " + 
-                                host + ":" + port + ". Is the server running?");
+            throw new IOException("Cannot connect to load balancer server at " +
+                    host + ":" + port + ". Is the server running?");
         }
         
         try (Socket socket = new Socket()) {
@@ -136,7 +133,7 @@ public class LoadBalancerClient {
             
             // Create and send operation request
             FileOperation operation = new FileOperation(
-                "DOWNLOAD", fileId, chunkNumber, 0
+                    "DOWNLOAD", fileId, chunkNumber, 0
             );
             out.writeObject(operation);
             
@@ -152,8 +149,8 @@ public class LoadBalancerClient {
             byte[] data = new byte[dataLength];
             in.readFully(data);
             
-            System.out.println("Successfully downloaded chunk " + chunkNumber + 
-                             " from container " + containerId);
+            System.out.println("Successfully downloaded chunk " + chunkNumber +
+                    " from container " + containerId);
             return data;
             
         } catch (SocketTimeoutException e) {
