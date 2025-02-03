@@ -14,7 +14,7 @@ import java.util.logging.Logger;
  * JavaFX App
  */
 public class App extends Application {
-
+    
     @Override
     public void start(Stage stage) throws IOException {
         Stage secondaryStage = new Stage();
@@ -32,6 +32,23 @@ public class App extends Application {
         } catch (ClassNotFoundException ex) {
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
         }
+        
+        // Initialize and start the load balancer server
+        LoadBalancer loadBalancer = new LoadBalancer();
+        
+        // Add storage containers
+        for (int i = 1; i <= 4; i++) {
+            FileStorageContainer container = new FileStorageContainer(
+                    "container-" + i,
+                    "/storage/container" + i
+            );
+            loadBalancer.addContainer(container);
+        }
+        
+        // Start the server
+        LoadBalancerServer server = new LoadBalancerServer(8080, loadBalancer);
+        server.start();
+        
         try {
             FXMLLoader loader = new FXMLLoader();
             loader.setLocation(getClass().getResource("primary.fxml"));
@@ -40,14 +57,14 @@ public class App extends Application {
             secondaryStage.setScene(scene);
             secondaryStage.setTitle("Primary View");
             secondaryStage.show();
-
+            
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
+    
     public static void main(String[] args) {
         launch();
     }
-
+    
 }

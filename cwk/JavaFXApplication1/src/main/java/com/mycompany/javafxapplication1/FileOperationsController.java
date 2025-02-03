@@ -22,8 +22,6 @@ public class FileOperationsController {
     private TextField fileTextField;
     @FXML
     private ProgressBar progressBar;
-    @FXML
-    private ComboBox<String> algorithmComboBox;
     
     private Map<String, List<String>> fileContainerMap;
     private LoadBalancer loadBalancer;
@@ -33,6 +31,10 @@ public class FileOperationsController {
     
     @FXML
     public void initialize() {
+        // Initialize your components
+        fileTextField.setText("No file selected");
+        progressBar.setProgress(0.0);
+        
         // Initialize the load balancer with storage containers
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
         fileContainerMap = new HashMap<>();
@@ -47,18 +49,11 @@ public class FileOperationsController {
             loadBalancer.addContainer(container);
         }
         
-        // Set up the algorithm selection dropdown
-        algorithmComboBox.getItems().addAll("RoundRobin", "ShortestJob", "Priority");
-        algorithmComboBox.setValue("RoundRobin");
-        
-        // Listen for algorithm changes
-        algorithmComboBox.setOnAction(event ->
-                loadBalancer.setAlgorithm(algorithmComboBox.getValue())
-        );
     }
     
     @FXML
     private void uploadBtnHandler(ActionEvent event) {
+        System.out.println("Upload button clicked - starting file selection process");
         Stage primaryStage = (Stage) uploadBtn.getScene().getWindow();
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Select File to Upload");
@@ -70,14 +65,18 @@ public class FileOperationsController {
             
             // Generate a unique ID for this file
             String fileId = UUID.randomUUID().toString();
+            System.out.println("Generated file ID: " + fileId);
             
             try {
+                System.out.println("Starting file upload process...");
                 uploadFileInChunks(selectedFile, fileId);
                 dialogue("File Upload", "File uploaded successfully across containers");
             } catch (IOException e) {
                 dialogue("Upload Error", "Failed to upload file: " + e.getMessage());
                 e.printStackTrace();
             }
+        } else {
+            System.out.println("No file was selected");
         }
     }
     
@@ -129,12 +128,14 @@ public class FileOperationsController {
             chunkNumber++;
             updateProgress(chunkNumber * buffer.length / (double) file.length());
         }
+        System.out.println(String.format("Processing chunk %d (size: %d bytes)",chunkNumber,bytesRead));
         
         fis.close();
     }
     
     @FXML
     private void downloadBtnHandler(ActionEvent event) {
+        System.out.println("Download button clicked - starting save location selection");
         Stage primaryStage = (Stage) downloadBtn.getScene().getWindow();
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save File");
@@ -186,6 +187,7 @@ public class FileOperationsController {
                 
                 // Update progress bar
                 updateProgress((chunkNumber + 1.0) / containerList.size());
+                System.out.println(String.format("Retrieving chunk %d of %d",chunkNumber + 1,containerList.size()));
             }
             
             fos.flush();

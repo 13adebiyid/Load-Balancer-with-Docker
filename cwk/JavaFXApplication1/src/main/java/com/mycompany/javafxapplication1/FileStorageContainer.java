@@ -45,31 +45,37 @@ public class FileStorageContainer {
      * @param data The actual chunk data to store
      * @param trafficLevel Affects the artificial delay (1.0 = normal)
      */
-    public void storeFileChunk(String fileId, int chunkNumber, byte[] data, double trafficLevel) 
+    // In FileStorageContainer.java, modify storeFileChunk:
+    
+    public void storeFileChunk(String fileId, int chunkNumber, byte[] data, double trafficLevel)
             throws IOException, InterruptedException {
-        // Increment active connections counter
-        activeConnections.incrementAndGet();
         
+        // First, construct the path where the chunk will be stored
+        // We use File.separator to ensure correct path separators on different operating systems
+        String chunkPath = storagePath + File.separator + fileId + "_chunk_" + chunkNumber;
+        
+        // Create encryption instance
+        FileEncryption encryption = new FileEncryption();
+        
+        // Encrypt the chunk data
+        byte[] encryptedData = encryption.encryptData(data);
+        if (encryptedData == null) {
+            throw new IOException("Failed to encrypt chunk data");
+        }
+        
+        // Store the encryption key in the database
+        String keyString = encryption.getKeyAsString();
+        DB db = new DB();
         try {
-            // Create the file chunk path
-            String chunkPath = storagePath + File.separator + 
-                             fileId + "_chunk_" + chunkNumber;
-            
-            // Simulate network delay
-            simulateNetworkDelay(trafficLevel);
-            
-            // Write the chunk to disk
-            try (FileOutputStream fos = new FileOutputStream(chunkPath)) {
-                fos.write(data);
-                fos.flush();
-            }
-            
-            System.out.println("Stored chunk " + chunkNumber + " of file " + fileId + 
-                             " in container " + containerId);
-                             
-        } finally {
-            // Always decrement active connections counter
-            activeConnections.decrementAndGet();
+            db.storeEncryptionKey(fileId, chunkNumber, keyString);
+        } catch (ClassNotFoundException e) {
+            throw new IOException("Failed to store encryption key");
+        }
+        
+        // Write the encrypted data to the file
+        try (FileOutputStream fos = new FileOutputStream(chunkPath)) {
+            fos.write(encryptedData);
+            fos.flush();
         }
     }
     
@@ -80,36 +86,37 @@ public class FileStorageContainer {
      * @param trafficLevel Affects the artificial delay (1.0 = normal)
      * @return The chunk data
      */
-    public byte[] retrieveFileChunk(String fileId, int chunkNumber, double trafficLevel) 
+    public byte[] retrieveFileChunk(String fileId, int chunkNumber, double trafficLevel)
             throws IOException, InterruptedException {
-        // Increment active connections counter
-        activeConnections.incrementAndGet();
         
-        try {
-            // Get the chunk file path
-            String chunkPath = storagePath + File.separator + 
-                             fileId + "_chunk_" + chunkNumber;
-            
-            // Simulate network delay
-            simulateNetworkDelay(trafficLevel);
-            
-            // Read the chunk from disk
-            File chunkFile = new File(chunkPath);
-            byte[] data = new byte[(int) chunkFile.length()];
-            
-            try (FileInputStream fis = new FileInputStream(chunkFile)) {
-                fis.read(data);
-            }
-            
-            System.out.println("Retrieved chunk " + chunkNumber + " of file " + fileId + 
-                             " from container " + containerId);
-            
-            return data;
-            
-        } finally {
-            // Always decrement active connections counter
-            activeConnections.decrementAndGet();
+        // Read the encrypted data
+        String chunkPath = String.format("%s/%s_chunk_%d", storagePath, fileId, chunkNumber);
+        byte[] encryptedData;
+        try (FileInputStream fis = new FileInputStream(chunkPath)) {
+            encryptedData = fis.readAllBytes();
         }
+        
+        // Get the encryption key from database
+        DB db = new DB();
+        String keyString;
+        try {
+            keyString = db.getEncryptionKey(fileId, chunkNumber);
+        } catch (ClassNotFoundException e) {
+            throw new IOException("Failed to retrieve encryption key");
+        }
+        
+        // Create encryption instance and decrypt
+        FileEncryption encryption = FileEncryption.fromKey(keyString);
+        if (encryption == null) {
+            throw new IOException("Failed to create encryption instance");
+        }
+        
+        byte[] decryptedData = encryption.decryptData(encryptedData);
+        if (decryptedData == null) {
+            throw new IOException("Failed to decrypt chunk data");
+        }
+        
+        return decryptedData;
     }
     
     /**

@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
-import java.util.logging.Logger;
 
 /**
  * LoadBalancer class that distributes work across multiple file storage containers
@@ -42,31 +41,29 @@ public class LoadBalancer {
     }
     
     /**
-     * Set which scheduling algorithm to use
-     * @param algorithm The name of the algorithm (RoundRobin, ShortestJob, Priority)
-     */
-    public void setAlgorithm(String algorithm) {
-        if (algorithm.equals("RoundRobin") || 
-            algorithm.equals("ShortestJob") || 
-            algorithm.equals("Priority")) {
-            currentAlgorithm = algorithm;
-            System.out.println("Changed to algorithm: " + algorithm);
-        }
-    }
-    
-    /**
-     * Get the next container based on the current scheduling algorithm
+     * Get the next container based on system conditions
      * @return The selected FileStorageContainer
      */
     public FileStorageContainer getNextContainer() {
-        // Check if any containers are available
         if (containers.isEmpty()) {
             return null;
         }
         
-        FileStorageContainer selected = null;
+        // Check load levels to choose algorithm
+        int totalConnections = 0;
+        for (FileStorageContainer container : containers) {
+            totalConnections += container.getActiveConnections();
+        }
         
-        // Use the current algorithm to select container
+        // Choose algorithm based on load
+        if (totalConnections > containers.size() * 5) {  // High load
+            currentAlgorithm = "ShortestJob";
+        } else {
+            currentAlgorithm = "RoundRobin";  // Normal load
+        }
+        
+        // Select container using current algorithm
+        FileStorageContainer selected = null;
         if (currentAlgorithm.equals("RoundRobin")) {
             selected = roundRobinSelect();
         }
@@ -85,12 +82,10 @@ public class LoadBalancer {
      * @return The next container in the rotation
      */
     private FileStorageContainer roundRobinSelect() {
-        // Reset index if we've reached the end
         if (currentContainerIndex >= containers.size()) {
             currentContainerIndex = 0;
         }
         
-        // Get next container and increment index
         FileStorageContainer container = containers.get(currentContainerIndex);
         currentContainerIndex++;
         
@@ -105,7 +100,6 @@ public class LoadBalancer {
         FileStorageContainer selected = containers.get(0);
         int minConnections = selected.getActiveConnections();
         
-        // Find container with least connections
         for (FileStorageContainer container : containers) {
             if (container.getActiveConnections() < minConnections) {
                 selected = container;
@@ -124,7 +118,6 @@ public class LoadBalancer {
         FileStorageContainer selected = containers.get(0);
         int highestPriority = containerPriorities.get(selected.getId());
         
-        // Find container with highest priority
         for (FileStorageContainer container : containers) {
             int priority = containerPriorities.get(container.getId());
             if (priority > highestPriority) {
@@ -137,26 +130,12 @@ public class LoadBalancer {
     }
     
     /**
-     * Set the priority level for a container
-     * @param containerId The container's ID
-     * @param priority The priority level to set
-     */
-    public void setContainerPriority(String containerId, int priority) {
-        if (containerPriorities.containsKey(containerId)) {
-            containerPriorities.put(containerId, priority);
-            System.out.println("Set priority " + priority + " for container " + containerId);
-        }
-    }
-    
-    /**
      * Simulate network delay based on traffic level
      * @param trafficLevel LOW, MEDIUM, or HIGH
      */
     public void simulateDelay(String trafficLevel) {
-        // Base delay 30-90 seconds
         int baseDelay = 30000 + random.nextInt(60000);
         
-        // Adjust for traffic
         int finalDelay = baseDelay;
         if (trafficLevel.equals("HIGH")) {
             finalDelay = (int)(baseDelay * 2.0);

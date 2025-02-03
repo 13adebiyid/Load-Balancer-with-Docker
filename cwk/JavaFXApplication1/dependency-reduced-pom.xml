@@ -11,6 +11,7 @@
         <version>3.4.1</version>
         <executions>
           <execution>
+            <id>gui-application</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -39,13 +40,17 @@
               <goal>jar</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.build.directory}</outputDirectory>
               <classifier>loadbalancer</classifier>
               <archive>
                 <manifest>
-                  <mainClass>com.mycompany.loadbalancer.LoadBalancer</mainClass>
+                  <mainClass>com.mycompany.javafxapplication1.LoadBalancerMain</mainClass>
                 </manifest>
               </archive>
+              <includes>
+                <include>com/mycompany/javafxapplication1/LoadBalancer.class</include>
+                <include>com/mycompany/javafxapplication1/FileStorageContainer.class</include>
+                <include>com/mycompany/javafxapplication1/LoadBalancerMain.class</include>
+              </includes>
             </configuration>
           </execution>
         </executions>

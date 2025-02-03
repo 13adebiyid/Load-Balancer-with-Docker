@@ -1,7 +1,7 @@
 /*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Project/Maven2/JavaApp/src/main/java/${packagePath}/${mainClassName}.java to edit this template
- */
+* Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+* Click nbfs://nbhost/SystemFileSystem/Templates/Project/Maven2/JavaApp/src/main/java/${packagePath}/${mainClassName}.java to edit this template
+*/
 package com.mycompany.javafxapplication1;
 
 import java.io.File;
@@ -67,7 +67,7 @@ public class DB {
             e.printStackTrace();
         }
     }
-        
+    
     /**
      * @brief create a new table
      * @param tableName name of type String
@@ -80,7 +80,7 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             statement.executeUpdate("create table if not exists " + tableName + "(id integer primary key autoincrement, name string, password string)");
-
+            
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
@@ -94,7 +94,7 @@ public class DB {
             }
         }
     }
-
+    
     /**
      * @brief delete table
      * @param tableName of type String
@@ -120,20 +120,20 @@ public class DB {
             }
         }
     }
-
+    
     /**
      * @brief add data to the database method
      * @param user name of type String
      * @param password of type String
      */
-        public void addDataToDB(String user, String password) throws InvalidKeySpecException, ClassNotFoundException {
+    public void addDataToDB(String user, String password) throws InvalidKeySpecException, ClassNotFoundException {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
 //            System.out.println("Adding User: " + user + ", Password: " + password);
-            statement.executeUpdate("insert into " + dataBaseTableName + " (name, password) values('" + user + "','" + generateSecurePassword(password) + "')");
+statement.executeUpdate("insert into " + dataBaseTableName + " (name, password) values('" + user + "','" + generateSecurePassword(password) + "')");
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
@@ -155,7 +155,7 @@ public class DB {
             }
         }
     }
-
+    
     /**
      * @brief get data from the Database method
      * @retunr results as ResultSet
@@ -187,7 +187,7 @@ public class DB {
         }
         return result;
     }
-
+    
     /**
      * @brief decode password method
      * @param user name as type String
@@ -222,20 +222,20 @@ public class DB {
                 System.err.println(e.getMessage());
             }
         }
-
+        
         return flag;
     }
-
+    
     private String getSaltvalue(int length) {
         StringBuilder finalval = new StringBuilder(length);
-
+        
         for (int i = 0; i < length; i++) {
             finalval.append(characters.charAt(random.nextInt(characters.length())));
         }
-
+        
         return new String(finalval);
     }
-
+    
     /* Method to generate the hash value */
     private byte[] hash(char[] password, byte[] salt) throws InvalidKeySpecException {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keylength);
@@ -249,17 +249,17 @@ public class DB {
             spec.clearPassword();
         }
     }
-
+    
     public String generateSecurePassword(String password) throws InvalidKeySpecException {
         String finalval = null;
-
+        
         byte[] securePassword = hash(password.toCharArray(), saltValue.getBytes());
-
+        
         finalval = Base64.getEncoder().encodeToString(securePassword);
-
+        
         return finalval;
     }
-
+    
     /**
      * @brief get table name
      * @return table name as String
@@ -267,42 +267,169 @@ public class DB {
     public String getTableName() {
         return this.dataBaseTableName;
     }
-
+    
     /**
      * @brief print a message on screen method
      * @param message of type String
      */
     public void log(String message) {
         System.out.println(message);
-
+        
     }
-
-//    public static void main(String[] args) throws InvalidKeySpecException {
-//        DB myObj = new DB();
-//        myObj.log("-------- Simple Tutorial on how to make JDBC connection to SQLite DB ------------");
-//        myObj.log("\n---------- Drop table ----------");
-//        myObj.delTable(myObj.getTableName());
-//        myObj.log("\n---------- Create table ----------");
-//        myObj.createTable(myObj.getTableName());
-//        myObj.log("\n---------- Adding Users ----------");
-//        myObj.addDataToDB("ntu-user", "12z34");
-//        myObj.addDataToDB("ntu-user2", "12yx4");
-//        myObj.addDataToDB("ntu-user3", "a1234");
-//        myObj.log("\n---------- get Data from the Table ----------");
-//        myObj.getDataFromTable(myObj.getTableName());
-//        myObj.log("\n---------- Validate users ----------");
-//        String[] users = new String[]{"ntu-user", "ntu-user", "ntu-user1"};
-//        String[] passwords = new String[]{"12z34", "1235", "1234"};
-//        String[] messages = new String[]{"VALID user and password",
-//            "VALID user and INVALID password", "INVALID user and VALID password"};
-//
-//        for (int i = 0; i < 3; i++) {
-//            System.out.println("Testing " + messages[i]);
-//            if (myObj.validateUser(users[i], passwords[i], myObj.getTableName())) {
-//                myObj.log("++++++++++VALID credentials!++++++++++++");
-//            } else {
-//                myObj.log("----------INVALID credentials!----------");
-//            }
-//        }
-//    }
+    
+    // Add these methods to your existing DB class
+    public void saveFileMetadata(FileMetadata metadata) throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            // Add file metadata
+            statement.executeUpdate(
+                    "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
+                            "VALUES ('" + metadata.getFileId() + "', '" + metadata.getFileName() + "', '" +
+                            metadata.getOwnerUser() + "', " + metadata.getTotalSize() + ", " +
+                            metadata.getTotalChunks() + ", " + (metadata.isShared() ? 1 : 0) + ")"
+            );
+            
+            // Add chunk locations
+            for (int i = 0; i < metadata.getTotalChunks(); i++) {
+                String containerId = metadata.getContainerForChunk(i);
+                if (containerId != null) {
+                    statement.executeUpdate(
+                            "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
+                                    "VALUES ('" + metadata.getFileId() + "', " + i + ", '" + containerId + "')"
+                    );
+                }
+            }
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+    }
+    
+    public FileMetadata getFileMetadata(String fileId) throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            ResultSet rs = statement.executeQuery(
+                    "SELECT * FROM files WHERE file_id = '" + fileId + "'"
+            );
+            
+            if (rs.next()) {
+                FileMetadata metadata = new FileMetadata(
+                        rs.getString("file_id"),
+                        rs.getString("file_name"),
+                        rs.getString("owner_user"),
+                        rs.getLong("total_size")
+                );
+                
+                metadata.setShared(rs.getInt("is_shared") == 1);
+                
+                // Get chunk locations
+                ResultSet chunksRs = statement.executeQuery(
+                        "SELECT chunk_number, container_id FROM file_chunks " +
+                                "WHERE file_id = '" + fileId + "' ORDER BY chunk_number"
+                );
+                
+                while (chunksRs.next()) {
+                    metadata.addChunkLocation(
+                            chunksRs.getInt("chunk_number"),
+                            chunksRs.getString("container_id")
+                    );
+                }
+                
+                return metadata;
+            }
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+        
+        return null;
+    }
+    
+    public void storeEncryptionKey(String fileId, int chunkNumber, String keyString)
+            throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            statement.executeUpdate(
+                    "CREATE TABLE IF NOT EXISTS encryption_keys (" +
+                            "file_id TEXT, chunk_number INTEGER, key_string TEXT, " +
+                            "PRIMARY KEY (file_id, chunk_number))"
+            );
+            
+            statement.executeUpdate(
+                    "INSERT OR REPLACE INTO encryption_keys (file_id, chunk_number, key_string) " +
+                            "VALUES ('" + fileId + "', " + chunkNumber + ", '" + keyString + "')"
+            );
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+    }
+    
+    public String getEncryptionKey(String fileId, int chunkNumber) throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            ResultSet rs = statement.executeQuery(
+                    "SELECT key_string FROM encryption_keys " +
+                            "WHERE file_id = '" + fileId + "' AND chunk_number = " + chunkNumber
+            );
+            
+            if (rs.next()) {
+                return rs.getString("key_string");
+            }
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+        
+        return null;
+    }
+    
 }
