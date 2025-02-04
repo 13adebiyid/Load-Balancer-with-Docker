@@ -43,22 +43,27 @@ public class SecondaryController {
     private Button fileOperationsBtn; 
     
     @FXML
-    private void switchToFileOperations() {
-        Stage fileOperationsStage = new Stage();
-        Stage currentStage = (Stage) fileOperationsBtn.getScene().getWindow();
-        try {
-            FXMLLoader loader = new FXMLLoader();
-            loader.setLocation(getClass().getResource("file_operations.fxml"));
-            Parent root = loader.load();
-            Scene scene = new Scene(root, 640, 480);
-            fileOperationsStage.setScene(scene);
-            fileOperationsStage.setTitle("File Operations");
-            fileOperationsStage.show();
-            currentStage.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+private void switchToFileOperations() {
+    Stage fileOperationsStage = new Stage();
+    Stage currentStage = (Stage) fileOperationsBtn.getScene().getWindow();
+    try {
+        FXMLLoader loader = new FXMLLoader();
+        loader.setLocation(getClass().getResource("file_operations.fxml"));
+        Parent root = loader.load();
+        
+        // Get the controller and set the current user
+        FileOperationsController controller = loader.getController();
+        controller.setCurrentUser(userTextField.getText());  // Add this line
+        
+        Scene scene = new Scene(root, 640, 480);
+        fileOperationsStage.setScene(scene);
+        fileOperationsStage.setTitle("File Operations");
+        fileOperationsStage.show();
+        currentStage.close();
+    } catch (Exception e) {
+        e.printStackTrace();
     }
+}
 
     
     @FXML

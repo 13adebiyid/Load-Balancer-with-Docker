@@ -2,6 +2,8 @@ package com.mycompany.javafxapplication1;
 
 import java.io.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -330,7 +332,11 @@ public class FileOperationsController {
                     fileId, file.getName(), currentUser, totalSize
                 );
                 metadata.setTotalChunks(chunkNumber);
-                database.saveFileMetadata(metadata);
+                try {
+                    database.saveFileMetadata(metadata);
+                } catch (ClassNotFoundException ex) {
+                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                }
                 
                 System.out.println("Upload complete. Total chunks: " + chunkNumber);
             }

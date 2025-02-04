@@ -197,6 +197,67 @@ public class DB {
     }
     
     /**
+ * Deletes a file's metadata and associated records from the database
+ * This includes removing entries from:
+ * - files table
+ * - file_chunks table
+ * - encryption_keys table
+ * @param fileId The unique identifier of the file to delete
+ * @throws ClassNotFoundException if the database driver cannot be loaded
+ */
+public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
+    try {
+        Class.forName("org.sqlite.JDBC");
+        connection = DriverManager.getConnection(fileName);
+        
+        // Use a transaction to ensure all related records are deleted atomically
+        connection.setAutoCommit(false);
+        var statement = connection.createStatement();
+        statement.setQueryTimeout(timeout);
+        
+        try {
+            // Delete encryption keys first (foreign key constraint)
+            statement.executeUpdate(
+                "DELETE FROM encryption_keys WHERE file_id = '" + fileId + "'"
+            );
+            
+            // Delete chunk locations (foreign key constraint)
+            statement.executeUpdate(
+                "DELETE FROM file_chunks WHERE file_id = '" + fileId + "'"
+            );
+            
+            // Finally delete the main file record
+            statement.executeUpdate(
+                "DELETE FROM files WHERE file_id = '" + fileId + "'"
+            );
+            
+            // If we got here without exceptions, commit the transaction
+            connection.commit();
+            System.out.println("Successfully deleted metadata for file: " + fileId);
+            
+        } catch (SQLException e) {
+            // If anything goes wrong, roll back all changes
+            connection.rollback();
+            throw e;
+        }
+        
+    } catch (SQLException ex) {
+        Logger.getLogger(DB.class.getName()).log(Level.SEVERE, 
+            "Failed to delete file metadata: " + ex.getMessage(), ex);
+        throw new RuntimeException("Failed to delete file metadata", ex);
+    } finally {
+        try {
+            if (connection != null) {
+                connection.setAutoCommit(true);  // Reset auto-commit mode
+                connection.close();
+            }
+        } catch (SQLException e) {
+            System.err.println("Error closing connection: " + e.getMessage());
+        }
+    }
+}
+    
+    /**
      * Retrieves all files from the database
      * @return List of FileMetadata objects
      */
