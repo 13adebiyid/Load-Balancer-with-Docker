@@ -161,7 +161,7 @@ public class LoadBalancer {
         
         int finalDelay = baseDelay;
         if (trafficLevel.equals("HIGH")) {
-            finalDelay = (int)(baseDelay * 2.0);
+            finalDelay = (int)(baseDelay * 1.5);
         }
         else if (trafficLevel.equals("LOW")) {
             finalDelay = (int)(baseDelay * 0.5);
