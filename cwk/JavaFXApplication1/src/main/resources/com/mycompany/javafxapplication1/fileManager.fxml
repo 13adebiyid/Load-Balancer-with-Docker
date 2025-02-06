@@ -36,7 +36,7 @@
             </children>
         </GridPane>
         
-        <TableView fx:id="filesTableView" prefHeight="200.0">
+        <TableView fx:id="filesTable" prefHeight="200.0">
             <columns>
                 <TableColumn fx:id="fileNameColumn" text="File Name" />
                 <TableColumn fx:id="fileSizeColumn" text="Size" />

@@ -263,16 +263,17 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
      */
     public List<FileMetadata> getAllFiles() throws ClassNotFoundException {
         List<FileMetadata> files = new ArrayList<>();
+        Connection conn = null;
+        Statement stmt = null;
         
         try {
             Class.forName("org.sqlite.JDBC");
-            connection = DriverManager.getConnection(fileName);
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
+            conn = DriverManager.getConnection(fileName);
+            stmt = conn.createStatement();
+            stmt.setQueryTimeout(timeout);
             
-            ResultSet rs = statement.executeQuery(
-                "SELECT * FROM files"
-            );
+            // First get all files
+            ResultSet rs = stmt.executeQuery("SELECT * FROM files");
             
             while (rs.next()) {
                 FileMetadata metadata = new FileMetadata(
@@ -283,37 +284,38 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
                 );
                 metadata.setShared(rs.getInt("is_shared") == 1);
                 
-                // Get chunk locations for this file
-                ResultSet chunksRs = statement.executeQuery(
-                    "SELECT chunk_number, container_id FROM file_chunks " +
-                    "WHERE file_id = '" + metadata.getFileId() + "' " +
-                    "ORDER BY chunk_number"
-                );
-                
-                while (chunksRs.next()) {
-                    metadata.addChunkLocation(
-                        chunksRs.getInt("chunk_number"),
-                        chunksRs.getString("container_id")
+                // Create a new statement for chunk queries
+                try (Statement chunkStmt = conn.createStatement()) {
+                    ResultSet chunksRs = chunkStmt.executeQuery(
+                        "SELECT chunk_number, container_id FROM file_chunks " +
+                        "WHERE file_id = '" + metadata.getFileId() + "' " +
+                        "ORDER BY chunk_number"
                     );
+                    
+                    while (chunksRs.next()) {
+                        metadata.addChunkLocation(
+                            chunksRs.getInt("chunk_number"),
+                            chunksRs.getString("container_id")
+                        );
+                    }
                 }
                 
                 files.add(metadata);
             }
+            
+            return files;
             
         } catch (SQLException e) {
             System.err.println("Error retrieving files: " + e.getMessage());
             throw new RuntimeException("Database error", e);
         } finally {
             try {
-                if (connection != null) {
-                    connection.close();
-                }
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
             } catch (SQLException e) {
-                System.err.println("Error closing connection: " + e.getMessage());
+                System.err.println("Error closing database resources: " + e.getMessage());
             }
         }
-        
-        return files;
     }
     
     /**
@@ -498,42 +500,57 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
         
     }
     
-    // Add these methods to your existing DB class
     public void saveFileMetadata(FileMetadata metadata) throws ClassNotFoundException {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
+            connection.setAutoCommit(false);  // Start transaction
+            
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            // Add file metadata
-            statement.executeUpdate(
+            try {
+                // Add file metadata
+                statement.executeUpdate(
                     "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
-                            "VALUES ('" + metadata.getFileId() + "', '" + metadata.getFileName() + "', '" +
-                            metadata.getOwnerUser() + "', " + metadata.getTotalSize() + ", " +
-                            metadata.getTotalChunks() + ", " + (metadata.isShared() ? 1 : 0) + ")"
-            );
-            
-            // Add chunk locations
-            for (int i = 0; i < metadata.getTotalChunks(); i++) {
-                String containerId = metadata.getContainerForChunk(i);
-                if (containerId != null) {
-                    statement.executeUpdate(
+                    "VALUES ('" + metadata.getFileId() + "', '" + metadata.getFileName() + "', '" +
+                    metadata.getOwnerUser() + "', " + metadata.getTotalSize() + ", " +
+                    metadata.getTotalChunks() + ", " + (metadata.isShared() ? 1 : 0) + ")"
+                );
+                
+                // Add chunk locations
+                for (int i = 0; i < metadata.getTotalChunks(); i++) {
+                    String containerId = metadata.getContainerForChunk(i);
+                    if (containerId != null) {
+                        statement.executeUpdate(
                             "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
-                                    "VALUES ('" + metadata.getFileId() + "', " + i + ", '" + containerId + "')"
-                    );
+                            "VALUES ('" + metadata.getFileId() + "', " + i + ", '" + containerId + "')"
+                        );
+                    }
                 }
+                
+                // If we get here, everything worked, so commit the transaction
+                connection.commit();
+                System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
+                
+            } catch (SQLException e) {
+                // If anything fails, roll back the entire transaction
+                connection.rollback();
+                throw e;
             }
             
         } catch (SQLException ex) {
-            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, 
+                "Failed to save file metadata: " + ex.getMessage(), ex);
+            throw new RuntimeException("Failed to save file metadata", ex);
         } finally {
             try {
                 if (connection != null) {
+                    connection.setAutoCommit(true);  // Reset auto-commit
                     connection.close();
                 }
             } catch (SQLException e) {
-                System.err.println(e.getMessage());
+                System.err.println("Error closing connection: " + e.getMessage());
             }
         }
     }

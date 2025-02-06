@@ -7,6 +7,7 @@ import java.util.logging.Logger;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -35,8 +36,7 @@ public class FileOperationsController {
     
     // Constants
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
-    private static final int MAX_RETRIES = 3;
-    private static final long RETRY_DELAY = 5000; // 5 seconds
+
     
     // Instance variables
     private Map<String, List<String>> fileContainerMap;
@@ -111,6 +111,8 @@ public class FileOperationsController {
             return new SimpleStringProperty(readableSize);
         });
         
+        
+        
         // Add context menu for files
         filesTable.setRowFactory(tv -> {
             TableRow<FileMetadata> row = new TableRow<>();
@@ -148,68 +150,77 @@ public class FileOperationsController {
      * Refreshes the files list from the database
      */
     private void refreshFilesList() {
-        try {
-            // Update the table on the main UI thread
-            List<FileMetadata> files = database.getAllFiles();
-            Platform.runLater(() -> {
+    try {
+        System.out.println("Refreshing files list...");
+        List<FileMetadata> files = database.getAllFiles();
+        System.out.println("Retrieved " + files.size() + " files from database");
+        
+        Platform.runLater(() -> {
+            try {
                 filesTable.getItems().clear();
                 filesTable.getItems().addAll(files);
-            });
-        } catch (ClassNotFoundException e) {
-            Platform.runLater(() ->
-                    showAlert(Alert.AlertType.ERROR, "Error", "Failed to load files: " + e.getMessage())
-            );
-            e.printStackTrace();
-        }
+                filesTable.refresh();
+                System.out.println("Updated table view with " + filesTable.getItems().size() + " items");
+            } catch (Exception e) {
+                System.err.println("Error updating table: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+    } catch (ClassNotFoundException e) {
+        System.err.println("Failed to load files: " + e.getMessage());
+        e.printStackTrace();
+        Platform.runLater(() ->
+            showAlert(Alert.AlertType.ERROR, "Error", "Failed to load files: " + e.getMessage())
+        );
     }
+}
     
     /**
      * Handles file upload button click
      */
     @FXML
-    private void uploadBtnHandler(ActionEvent event) {
-        // Ensure we have a logged-in user before allowing upload
-        if (currentUser == null || currentUser.isEmpty()) {
-            showAlert(Alert.AlertType.ERROR, "Error", "Please log in to upload files");
-            return;
-        }
-        
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Select File to Upload");
-        File selectedFile = fileChooser.showOpenDialog(uploadBtn.getScene().getWindow());
-        
-        if (selectedFile != null) {
-            fileTextField.setText(selectedFile.getAbsolutePath());
-            String fileId = UUID.randomUUID().toString();
-            
-            setControlsEnabled(false);
-            operationCancelled = false;
-            
-            new Thread(() -> {
-                try {
-                    // Upload file and get metadata on completion
-                    uploadFileInChunks(selectedFile, fileId);
-                    
-                    if (!operationCancelled) {
-                        Platform.runLater(() -> {
-                            showAlert(Alert.AlertType.INFORMATION, "Success",
-                                    "File uploaded successfully");
-                            refreshFilesList();
-                            setControlsEnabled(true);
-                            clearProgress();
-                        });
-                    }
-                } catch (Exception e) {
-                    Platform.runLater(() -> {
-                        showAlert(Alert.AlertType.ERROR, "Upload Error",
-                                "Failed to upload: " + e.getMessage());
-                        setControlsEnabled(true);
-                        clearProgress();
-                    });
-                }
-            }).start();
-        }
+private void uploadBtnHandler(ActionEvent event) {
+    if (currentUser == null || currentUser.isEmpty()) {
+        showAlert(Alert.AlertType.ERROR, "Error", "Please log in to upload files");
+        return;
     }
+    
+    FileChooser fileChooser = new FileChooser();
+    fileChooser.setTitle("Select File to Upload");
+    File selectedFile = fileChooser.showOpenDialog(uploadBtn.getScene().getWindow());
+    
+    if (selectedFile != null) {
+        fileTextField.setText(selectedFile.getAbsolutePath());
+        String fileId = UUID.randomUUID().toString();
+        
+        setControlsEnabled(false);
+        operationCancelled = false;
+        
+        Task<Void> uploadTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                uploadFileInChunks(selectedFile, fileId);
+                return null;
+            }
+        };
+
+        uploadTask.setOnSucceeded(e -> {
+            setControlsEnabled(true);
+            clearProgress();
+            refreshFilesList(); // Refresh list after successful upload
+        });
+
+        uploadTask.setOnFailed(e -> {
+            setControlsEnabled(true);
+            clearProgress();
+            Throwable exc = uploadTask.getException();
+            showAlert(Alert.AlertType.ERROR, "Upload Failed", 
+                     exc != null ? exc.getMessage() : "Unknown error");
+        });
+
+        new Thread(uploadTask).start();
+    }
+}
     
     /**
      * Handles file download button click
@@ -268,172 +279,164 @@ public class FileOperationsController {
      * Uploads a file in chunks using the load balancer
      */
     private void uploadFileInChunks(File file, String fileId) throws IOException {
-        long totalSize = file.length();
-        System.out.println("Starting upload of file: " + file.getName() +
-                " (Size: " + totalSize + " bytes)");
+    long totalSize = file.length();
+    System.out.println("Starting upload of file: " + file.getName() +
+            " (Size: " + totalSize + " bytes)");
+    
+    try (FileInputStream fis = new FileInputStream(file)) {
+        byte[] buffer = new byte[CHUNK_SIZE];
+        int chunkNumber = 0;
+        long bytesProcessed = 0;
+        int bytesRead;
         
-        try (FileInputStream fis = new FileInputStream(file)) {
-            byte[] buffer = new byte[CHUNK_SIZE];
-            int chunkNumber = 0;
-            long bytesProcessed = 0;
-            int bytesRead;
-            
-            while ((bytesRead = fis.read(buffer)) != -1 && !operationCancelled) {
-                byte[] chunk;
-                if (bytesRead < CHUNK_SIZE) {
-                    chunk = new byte[bytesRead];
-                    System.arraycopy(buffer, 0, chunk, 0, bytesRead);
-                } else {
-                    chunk = buffer.clone();
-                }
-                
-                System.out.println("Uploading chunk " + chunkNumber +
-                        " (size: " + bytesRead + " bytes)");
-                
-                boolean chunkUploaded = false;
-                int retries = 0;
-                
-                while (!chunkUploaded && retries < MAX_RETRIES && !operationCancelled) {
-                    try {
-                        String containerId = loadBalancerClient.uploadFileChunk(
-                                fileId, chunkNumber, chunk
-                        );
-                        
-                        if (containerId != null) {
-                            recordChunkLocation(fileId, chunkNumber, containerId);
-                            bytesProcessed += bytesRead;
-                            chunkUploaded = true;
-                            
-                            final double progress = (double) bytesProcessed / totalSize;
-                            Platform.runLater(() -> updateProgress(progress));
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Error uploading chunk " + chunkNumber +
-                                ": " + e.getMessage());
-                        retries++;
-                        
-                        if (retries < MAX_RETRIES) {
-                            System.out.println("Retrying chunk " + chunkNumber +
-                                    " (attempt " + (retries + 1) + ")");
-                            Thread.sleep(RETRY_DELAY);
-                        } else {
-                            throw new IOException("Failed to upload chunk after " +
-                                    MAX_RETRIES + " attempts", e);
-                        }
-                    }
-                }
-                
-                if (operationCancelled) {
-                    System.out.println("Upload cancelled by user");
-                    break;
-                }
-                
-                chunkNumber++;
+        while ((bytesRead = fis.read(buffer)) != -1 && !operationCancelled) {
+            byte[] chunk;
+            if (bytesRead < CHUNK_SIZE) {
+                chunk = new byte[bytesRead];
+                System.arraycopy(buffer, 0, chunk, 0, bytesRead);
+            } else {
+                chunk = buffer.clone();
             }
             
-            if (!operationCancelled) {
-                FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, totalSize);
-                metadata.setTotalChunks(chunkNumber);
-                
-                // Add chunk locations
-                for (int i = 0; i < chunkNumber; i++) {
-                    if (fileContainerMap.containsKey(fileId) && i < fileContainerMap.get(fileId).size()) {
-                        metadata.addChunkLocation(i, fileContainerMap.get(fileId).get(i));
-                    }
-                }
-                
+            System.out.println("Uploading chunk " + chunkNumber +
+                    " (size: " + bytesRead + " bytes)");
+            
+            boolean chunkUploaded = false;
+            int retries = 0;
+            
+            while (!chunkUploaded && !operationCancelled) {
                 try {
-                    database.saveFileMetadata(metadata);
-                    Platform.runLater(() -> {
-                        refreshFilesList();
-                        showAlert(Alert.AlertType.INFORMATION, "Success", "File uploaded successfully");
-                        setControlsEnabled(true);
-                        clearProgress();
-                    });
-                } catch (ClassNotFoundException ex) {
-                    throw new IOException("Failed to save metadata: " + ex.getMessage());
+                    String containerId = loadBalancerClient.uploadFileChunk(
+                            fileId, chunkNumber, chunk
+                    );
+                    
+                    if (containerId != null) {
+                        recordChunkLocation(fileId, chunkNumber, containerId);
+                        bytesProcessed += bytesRead;
+                        chunkUploaded = true;
+                        
+                        final double progress = (double) bytesProcessed / totalSize;
+                        Platform.runLater(() -> updateProgress(progress));
+                        
+                        // Simulate network delay (30-90 seconds)
+                        Thread.sleep(30000 + new Random().nextInt(60000));
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error uploading chunk " + chunkNumber +
+                            ": " + e.getMessage());
+                    
                 }
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Upload interrupted", e);
+            
+            if (operationCancelled) {
+                System.out.println("Upload cancelled by user");
+                break;
+            }
+            
+            chunkNumber++;
         }
+        
+        if (!operationCancelled) {
+            FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, totalSize);
+            metadata.setTotalChunks(chunkNumber);
+            
+            for (int i = 0; i < chunkNumber; i++) {
+                if (fileContainerMap.containsKey(fileId) && i < fileContainerMap.get(fileId).size()) {
+                    metadata.addChunkLocation(i, fileContainerMap.get(fileId).get(i));
+                }
+            }
+            
+            try {
+                database.saveFileMetadata(metadata);
+                System.out.println("Saved metadata for file: " + file.getName());
+            } catch (ClassNotFoundException ex) {
+                throw new IOException("Failed to save metadata: " + ex.getMessage());
+            }
+        }
+    }}
+    
+        // Helper method to show alerts on the JavaFX Application Thread
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        if (Platform.isFxApplicationThread()) {
+            showAlertImpl(type, title, message);
+        } else {
+            Platform.runLater(() -> showAlertImpl(type, title, message));
+        }
+    }
+
+    // Implementation of alert display
+    private void showAlertImpl(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
     
     /**
      * Downloads and reassembles a file from chunks
      */
     private void downloadAndAssembleFile(String fileId, File outputFile)
-            throws IOException, ClassNotFoundException {
-        
-        FileMetadata metadata = database.getFileMetadata(fileId);
-        if (metadata == null) {
-            throw new IOException("File metadata not found");
-        }
-        
-        System.out.println("Starting download of file: " + metadata.getFileName() +
-                " (Total chunks: " + metadata.getTotalChunks() + ")");
-        
-        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            long bytesProcessed = 0;
-            
-            for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks();
-                    chunkNumber++) {
-                
-                if (operationCancelled) {
-                    System.out.println("Download cancelled by user");
-                    break;
-                }
-                
-                System.out.println("Downloading chunk " + chunkNumber);
-                boolean chunkDownloaded = false;
-                int retries = 0;
-                
-                while (!chunkDownloaded && retries < MAX_RETRIES && !operationCancelled) {
-                    try {
-                        byte[] chunkData = loadBalancerClient.downloadFileChunk(
-                                fileId, chunkNumber
-                        );
-                        
-                        if (chunkData != null) {
-                            fos.write(chunkData);
-                            fos.flush();
-                            
-                            bytesProcessed += chunkData.length;
-                            chunkDownloaded = true;
-                            
-                            final double progress = (double) bytesProcessed /
-                                    metadata.getTotalSize();
-                            Platform.runLater(() -> updateProgress(progress));
-                            
-                            System.out.println("Downloaded chunk " + chunkNumber +
-                                    " (size: " + chunkData.length + " bytes)");
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Error downloading chunk " + chunkNumber +
-                                ": " + e.getMessage());
-                        retries++;
-                        
-                        if (retries < MAX_RETRIES) {
-                            System.out.println("Retrying chunk " + chunkNumber +
-                                    " (attempt " + (retries + 1) + ")");
-                            Thread.sleep(RETRY_DELAY);
-                        } else {
-                            throw new IOException("Failed to download chunk after " +
-                                    MAX_RETRIES + " attempts", e);
-                        }
-                    }
-                }
-            }
-            
-            if (!operationCancelled) {
-                System.out.println("Download complete. Total bytes: " + bytesProcessed);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Download interrupted", e);
-        }
+        throws IOException, ClassNotFoundException {
+    
+    FileMetadata metadata = database.getFileMetadata(fileId);
+    if (metadata == null) {
+        throw new IOException("File metadata not found");
     }
+    
+    System.out.println("Starting download of file: " + metadata.getFileName() +
+            " (Total chunks: " + metadata.getTotalChunks() + ")");
+    
+    try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+        long bytesProcessed = 0;
+        
+        for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
+            if (operationCancelled) {
+                System.out.println("Download cancelled by user");
+                break;
+            }
+            
+            System.out.println("Downloading chunk " + chunkNumber);
+            boolean chunkDownloaded = false;
+            int retries = 0;
+            
+            while (!chunkDownloaded && !operationCancelled) {
+                try {
+                    byte[] chunkData = loadBalancerClient.downloadFileChunk(
+                            fileId, chunkNumber
+                    );
+                    
+                    if (chunkData != null) {
+                        // Write the chunk data with proper flushing
+                        fos.write(chunkData);
+                        fos.flush();
+                        fos.getFD().sync();  // Force write to disk
+                        
+                        bytesProcessed += chunkData.length;
+                        chunkDownloaded = true;
+                        
+                        final double progress = (double) bytesProcessed / metadata.getTotalSize();
+                        Platform.runLater(() -> updateProgress(progress));
+                        
+                        System.out.println("Downloaded chunk " + chunkNumber +
+                                " (size: " + chunkData.length + " bytes)");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error downloading chunk " + chunkNumber +
+                            ": " + e.getMessage());
+                    
+                }
+            }
+        }
+        
+        // Final flush and sync after all chunks are written
+        fos.flush();
+        fos.getFD().sync();
+        
+        if (!operationCancelled) {
+            System.out.println("Download complete. Total bytes: " + bytesProcessed);
+        }
+    }}
     
     /**
      * Returns to the main menu
@@ -460,41 +463,45 @@ public class FileOperationsController {
             e.printStackTrace();
         }
     }
-    
-    /**
-     * Shows an alert dialog with custom type
-     */
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
+   
     
     /**
      * Updates the progress bar
      */
     private void updateProgress(double progress) {
-        progressBar.setProgress(Math.min(1.0, Math.max(0.0, progress)));
+        if (Platform.isFxApplicationThread()) {
+            progressBar.setProgress(Math.min(1.0, Math.max(0.0, progress)));
+        } else {
+            Platform.runLater(() -> progressBar.setProgress(Math.min(1.0, Math.max(0.0, progress))));
+        }
     }
     
     /**
      * Enables or disables UI controls during operations
      */
     private void setControlsEnabled(boolean enabled) {
-        uploadBtn.setDisable(!enabled);
-        downloadBtn.setDisable(!enabled);
-        filesTable.setDisable(!enabled);
+        if (Platform.isFxApplicationThread()) {
+            setControlsEnabledImpl(enabled);
+        } else {
+            Platform.runLater(() -> setControlsEnabledImpl(enabled));
+        }
     }
     
     /**
      * Resets the progress bar
      */
     private void clearProgress() {
-        progressBar.setProgress(0.0);
-        fileTextField.setText("No file selected");
+    if (Platform.isFxApplicationThread()) {
+        clearProgressImpl();
+    } else {
+        Platform.runLater(this::clearProgressImpl);
     }
+}
+
+private void clearProgressImpl() {
+    progressBar.setProgress(0.0);
+    fileTextField.setText("No file selected");
+}
     
     /**
      * Records the location of a file chunk
@@ -555,6 +562,12 @@ public class FileOperationsController {
                 });
             }
         }).start();
+    }
+
+    private void setControlsEnabledImpl(boolean enabled) {
+        uploadBtn.setDisable(!enabled);
+        downloadBtn.setDisable(!enabled);
+        filesTable.setDisable(!enabled);
     }
     
     /**

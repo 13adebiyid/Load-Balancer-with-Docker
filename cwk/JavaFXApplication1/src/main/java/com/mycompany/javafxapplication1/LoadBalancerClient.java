@@ -18,13 +18,7 @@ public class LoadBalancerClient {
     
     // Constants for networking and delays
     private static final int CONNECTION_TIMEOUT = 120000; // 2 minutes to account for artificial delays
-    private static final int MIN_DELAY = 30000;  // 30 seconds minimum delay
-    private static final int MAX_DELAY = 90000;  // 90 seconds maximum delay
-    
-    // Traffic level multipliers
-    private static final double LOW_TRAFFIC_MULTIPLIER = 0.5;
-    private static final double MEDIUM_TRAFFIC_MULTIPLIER = 1.0;
-    private static final double HIGH_TRAFFIC_MULTIPLIER = 2.0;
+
     
     /**
      * Constructor - initializes the client with server details
@@ -38,41 +32,7 @@ public class LoadBalancerClient {
         this.random = new Random();
         testConnection();  // Initial connection test
     }
-    
-    /**
-     * Simulates network traffic conditions as required by coursework
-     * @return Traffic multiplier to apply to delays
-     */
-    private double getTrafficMultiplier() {
-        // Randomly choose traffic condition with weighted probabilities
-        int rand = random.nextInt(100);
-        if (rand < 20) {  // 20% chance of high traffic
-            System.out.println("Simulating high traffic conditions");
-            return HIGH_TRAFFIC_MULTIPLIER;
-        } else if (rand < 70) {  // 50% chance of medium traffic
-            System.out.println("Simulating medium traffic conditions");
-            return MEDIUM_TRAFFIC_MULTIPLIER;
-        } else {  // 30% chance of low traffic
-            System.out.println("Simulating low traffic conditions");
-            return LOW_TRAFFIC_MULTIPLIER;
-        }
-    }
-    
-    /**
-     * Implements the required artificial delay with traffic simulation
-     * @throws InterruptedException if the delay is interrupted
-     */
-    private void simulateNetworkDelay() throws InterruptedException {
-        // Calculate base delay between 30-90 seconds
-        int baseDelay = MIN_DELAY + random.nextInt(MAX_DELAY - MIN_DELAY);
-        
-        // Apply traffic multiplier
-        double multiplier = getTrafficMultiplier();
-        int actualDelay = (int)(baseDelay * multiplier);
-        
-        System.out.println("Simulating network delay: " + (actualDelay / 1000) + " seconds");
-        Thread.sleep(actualDelay);
-    }
+
     
     /**
      * Uploads a file chunk to a storage container
@@ -121,18 +81,11 @@ public class LoadBalancerClient {
                     throw new IOException("Server reported upload failure");
                 }
                 
-                // Simulate network delay after successful upload
-                simulateNetworkDelay();
-                
                 System.out.println("Successfully uploaded chunk " + chunkNumber + 
                                  " to container " + containerId);
                 return containerId;
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Upload interrupted during delay simulation", e);
-        }
-    }
+        }    }
     
     /**
      * Downloads a file chunk from a storage container
@@ -176,19 +129,13 @@ public class LoadBalancerClient {
                 
                 byte[] data = new byte[dataLength];
                 in.readFully(data);
-                
-                // Simulate network delay after successful download
-                simulateNetworkDelay();
+
                 
                 System.out.println("Successfully downloaded chunk " + chunkNumber + 
                                  " from container " + containerId);
                 return data;
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Download interrupted during delay simulation", e);
-        }
-    }
+        }    }
     
     /**
      * Tests if the server is available
