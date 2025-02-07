@@ -57,7 +57,7 @@ public class FileStorageContainer {
      */
     // In FileStorageContainer.java, modify storeFileChunk:
     
-    public void storeFileChunk(String fileId, int chunkNumber, byte[] data, double trafficLevel)
+    public void storeFileChunk(String fileId, int chunkNumber, byte[] data)
             throws IOException, InterruptedException {
         
         // First, construct the path where the chunk will be stored
@@ -96,11 +96,11 @@ public class FileStorageContainer {
      * @param trafficLevel Affects the artificial delay (1.0 = normal)
      * @return The chunk data
      */
-    public byte[] retrieveFileChunk(String fileId, int chunkNumber, double trafficLevel)
+    public byte[] retrieveFileChunk(String fileId, int chunkNumber)
             throws IOException, InterruptedException {
         
         // Read the encrypted data
-        String chunkPath = String.format("%s/%s_chunk_%d", storagePath, fileId, chunkNumber);
+        String chunkPath = storagePath + File.separator + fileId + "_chunk_" + chunkNumber;
         byte[] encryptedData;
         try (FileInputStream fis = new FileInputStream(chunkPath)) {
             encryptedData = fis.readAllBytes();
@@ -129,18 +129,6 @@ public class FileStorageContainer {
         return decryptedData;
     }
     
-    /**
-     * Simulate network delay based on traffic level
-     * @param trafficLevel Multiplier for the base delay (1.0 = normal)
-     */
-    private void simulateNetworkDelay(double trafficLevel) throws InterruptedException {
-        // Base delay between 30-90 seconds as per requirements
-        int baseDelay = 30000 + random.nextInt(60000);
-        
-        // Adjust delay based on traffic level
-        int actualDelay = (int)(baseDelay * trafficLevel);
-        Thread.sleep(actualDelay);
-    }
     
     /**
      * Get the number of active connections to this container

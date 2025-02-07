@@ -69,10 +69,7 @@ public class LoadBalancerServer {
                 sendErrorResponse(out, "No available containers");
                 return;
             }
-            
-            // Get current traffic level from load balancer
-            double trafficMultiplier = loadBalancer.getCurrentTrafficLevel();
-            System.out.println("Current traffic multiplier: " + trafficMultiplier);
+
             
             // Send container ID to client
             out.writeObject(container.getId());
@@ -81,10 +78,10 @@ public class LoadBalancerServer {
             // Handle specific operations
             switch (operation.getType().toUpperCase()) {
                 case "UPLOAD":
-                    handleUpload(operation, container, in, out, trafficMultiplier);
+                    handleUpload(operation, container, in, out);
                     break;
                 case "DOWNLOAD":
-                    handleDownload(operation, container, in, out, trafficMultiplier);
+                    handleDownload(operation, container, in, out);
                     break;
                 default:
                     sendErrorResponse(out, "Unknown operation type: " + operation.getType());
@@ -101,10 +98,16 @@ public class LoadBalancerServer {
     }
     
     private void handleUpload(FileOperation operation, FileStorageContainer container,
-            ObjectInputStream in, ObjectOutputStream out, double trafficMultiplier)
+            ObjectInputStream in, ObjectOutputStream out)
             throws IOException {
         try {
             // Read the file data
+            
+            //debug code
+            System.out.println("Handling upload for file: " + operation.getFileId() + 
+                             ", chunk: " + operation.getChunkNumber() +
+                             " to container: " + container.getId());
+            
             int dataLength = operation.getChunkSize();
             if (dataLength <= 0) {
                 sendErrorResponse(out, "Invalid chunk size");
@@ -118,16 +121,14 @@ public class LoadBalancerServer {
             container.storeFileChunk(
                     operation.getFileId(),
                     operation.getChunkNumber(),
-                    data,
-                    trafficMultiplier
+                    data
             );
             
             // Send success confirmation
             out.writeBoolean(true);
             out.flush();
             
-            System.out.println("Successfully stored chunk " + operation.getChunkNumber() +
-                    " with traffic multiplier " + trafficMultiplier);
+            System.out.println("Successfully stored chunk " + operation.getChunkNumber());
             
         } catch (Exception e) {
             System.err.println("Upload failed: " + e.getMessage());
@@ -136,15 +137,19 @@ public class LoadBalancerServer {
         }
     }
     
-    private void handleDownload(FileOperation operation, FileStorageContainer container,
-            ObjectInputStream in, ObjectOutputStream out, double trafficMultiplier)
+    private void handleDownload(FileOperation operation, FileStorageContainer container, ObjectInputStream in, ObjectOutputStream out)
             throws IOException {
         try {
+            
+            //debug code
+            System.out.println("Handling upload for file: " + operation.getFileId() + 
+                             ", chunk: " + operation.getChunkNumber() +
+                             " to container: " + container.getId());
+            
             // Retrieve the chunk from the container
             byte[] data = container.retrieveFileChunk(
                     operation.getFileId(),
-                    operation.getChunkNumber(),
-                    trafficMultiplier
+                    operation.getChunkNumber()
             );
             
             if (data == null) {
@@ -157,8 +162,8 @@ public class LoadBalancerServer {
             out.write(data);
             out.flush();
             
-            System.out.println("Successfully retrieved chunk " + operation.getChunkNumber() +
-                    " with traffic multiplier " + trafficMultiplier);
+            System.out.println("Successfully retrieved chunk " + operation.getChunkNumber()+
+                             " (size: " + data.length + " bytes)");
             
         } catch (Exception e) {
             System.err.println("Download failed: " + e.getMessage());

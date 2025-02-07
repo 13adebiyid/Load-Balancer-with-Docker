@@ -384,6 +384,18 @@ private void uploadBtnHandler(ActionEvent event) {
         throw new IOException("File metadata not found");
     }
     
+    System.out.println("\nDebug info for download:");
+    System.out.println("File ID: " + fileId);
+    System.out.println("File name: " + metadata.getFileName());
+    System.out.println("Total chunks: " + metadata.getTotalChunks());
+    System.out.println("Total size: " + metadata.getTotalSize() + " bytes");
+    System.out.println("Owner: " + metadata.getOwnerUser());
+    System.out.println("Chunk locations:");
+    for (int i = 0; i < metadata.getTotalChunks(); i++) {
+        String containerId = metadata.getContainerForChunk(i);
+        System.out.println("Chunk " + i + ": Container " + containerId);
+    }
+    
     System.out.println("Starting download of file: " + metadata.getFileName() +
             " (Total chunks: " + metadata.getTotalChunks() + ")");
     

@@ -171,14 +171,6 @@ public class DB {
             if (needsInitialization) {
                 System.out.println("First-time database initialization - creating tables");
                 createTables();
-                
-                // Add default admin user if this is first initialization
-                try {
-                    addDataToDB("admin", "admin123");
-                    System.out.println("Created default admin account");
-                } catch (InvalidKeySpecException e) {
-                    System.err.println("Failed to create default admin account: " + e.getMessage());
-                }
             }
             
         } catch (SQLException ex) {
