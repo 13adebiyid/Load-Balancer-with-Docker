@@ -16,26 +16,6 @@ public class LoadBalancer {
     private int currentContainerIndex;
     private String currentAlgorithm;
     private Random random;
-    private TrafficLevel currentTrafficLevel;
-    private long lastTrafficUpdate;
-    private static final long TRAFFIC_UPDATE_INTERVAL = 30000;
-    
-    private enum TrafficLevel {
-        LOW(0.5),    // 50% of base delay
-        MEDIUM(1.0), // 100% of base delay
-        HIGH(2.0);   // 200% of base delay
-        
-        private final double multiplier;
-        
-        TrafficLevel(double multiplier) {
-            this.multiplier = multiplier;
-        }
-        
-        public double getMultiplier() {
-            return multiplier;
-        }
-    }
-    
     
     
     /**
@@ -48,8 +28,6 @@ public class LoadBalancer {
         currentContainerIndex = 0;
         currentAlgorithm = "RoundRobin";
         random = new Random();
-        this.currentTrafficLevel = TrafficLevel.MEDIUM; // Start with medium traffic
-        this.lastTrafficUpdate = System.currentTimeMillis();
     }
     
     /**
@@ -173,51 +151,7 @@ public class LoadBalancer {
             System.out.println("Delay interrupted");
         }
     }
-    
-    /**
-     * Gets the current traffic level multiplier for delay calculations.
-     * This method periodically updates the traffic level to simulate changing network conditions.
-     * @return A multiplier value that affects the artificial delay:
-     *         - 0.5 for low traffic (faster response)
-     *         - 1.0 for medium traffic (normal response)
-     *         - 2.0 for high traffic (slower response)
-     */
-    public double getCurrentTrafficLevel() {
-        // Check if it's time to update the traffic level
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastTrafficUpdate > TRAFFIC_UPDATE_INTERVAL) {
-            updateTrafficLevel();
-            lastTrafficUpdate = currentTime;
-        }
-        
-        // Log the current traffic condition for monitoring
-        System.out.println("Current traffic level: " + currentTrafficLevel +
-                " (multiplier: " + currentTrafficLevel.getMultiplier() + ")");
-        
-        return currentTrafficLevel.getMultiplier();
-    }
-    
-    /**
-     * Updates the traffic level based on simulated network conditions.
-     * This creates a more realistic simulation of varying network traffic.
-     */
-    private void updateTrafficLevel() {
-        // Randomly select a new traffic level
-        int randomValue = random.nextInt(100);
-        
-        // Distribution: 20% chance of high traffic, 50% medium, 30% low
-        if (randomValue < 20) {
-            currentTrafficLevel = TrafficLevel.HIGH;
-        } else if (randomValue < 70) {
-            currentTrafficLevel = TrafficLevel.MEDIUM;
-        } else {
-            currentTrafficLevel = TrafficLevel.LOW;
-        }
-        
-        System.out.println("Traffic level updated to: " + currentTrafficLevel);
-    }
-    
-    
+  
     /**
      * Update the health status of a container
      * @param containerId The container's ID

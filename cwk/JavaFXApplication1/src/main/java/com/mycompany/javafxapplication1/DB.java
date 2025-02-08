@@ -20,7 +20,9 @@ import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.logging.Level;
@@ -97,6 +99,21 @@ public class DB {
             // Create users table (maintaining existing functionality)
             statement.executeUpdate("create table if not exists " + dataBaseTableName +
                     "(id integer primary key autoincrement, name string, password string)");
+            
+            // Add this to your createTables() method, after the encryption_keys table
+            statement.executeUpdate(
+                    "create table if not exists file_permissions (" +
+                            "file_id text," +                       // Links to files table
+                            "user_name text," +                     // User who has permission
+                            "can_read integer default 0," +         // Read permission (0=false, 1=true)
+                            "can_write integer default 0," +        // Write permission (0=false, 1=true)
+                            "date_granted timestamp default current_timestamp," + // When permission was granted
+                            "granted_by text," +                    // Who granted the permission
+                            "primary key (file_id, user_name)," +
+                            "foreign key (file_id) references files(file_id) on delete cascade" +
+                            ")"
+            );
+            
             
             // Create files table to track overall file information
             // This stores metadata about each file in the system
@@ -189,65 +206,65 @@ public class DB {
     }
     
     /**
- * Deletes a file's metadata and associated records from the database
- * This includes removing entries from:
- * - files table
- * - file_chunks table
- * - encryption_keys table
- * @param fileId The unique identifier of the file to delete
- * @throws ClassNotFoundException if the database driver cannot be loaded
- */
-public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
-    try {
-        Class.forName("org.sqlite.JDBC");
-        connection = DriverManager.getConnection(fileName);
-        
-        // Use a transaction to ensure all related records are deleted atomically
-        connection.setAutoCommit(false);
-        var statement = connection.createStatement();
-        statement.setQueryTimeout(timeout);
-        
+     * Deletes a file's metadata and associated records from the database
+     * This includes removing entries from:
+     * - files table
+     * - file_chunks table
+     * - encryption_keys table
+     * @param fileId The unique identifier of the file to delete
+     * @throws ClassNotFoundException if the database driver cannot be loaded
+     */
+    public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
         try {
-            // Delete encryption keys first (foreign key constraint)
-            statement.executeUpdate(
-                "DELETE FROM encryption_keys WHERE file_id = '" + fileId + "'"
-            );
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
             
-            // Delete chunk locations (foreign key constraint)
-            statement.executeUpdate(
-                "DELETE FROM file_chunks WHERE file_id = '" + fileId + "'"
-            );
+            // Use a transaction to ensure all related records are deleted atomically
+            connection.setAutoCommit(false);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
             
-            // Finally delete the main file record
-            statement.executeUpdate(
-                "DELETE FROM files WHERE file_id = '" + fileId + "'"
-            );
-            
-            // If we got here without exceptions, commit the transaction
-            connection.commit();
-            System.out.println("Successfully deleted metadata for file: " + fileId);
-            
-        } catch (SQLException e) {
-            // If anything goes wrong, roll back all changes
-            connection.rollback();
-            throw e;
-        }
-        
-    } catch (SQLException ex) {
-        Logger.getLogger(DB.class.getName()).log(Level.SEVERE, 
-            "Failed to delete file metadata: " + ex.getMessage(), ex);
-        throw new RuntimeException("Failed to delete file metadata", ex);
-    } finally {
-        try {
-            if (connection != null) {
-                connection.setAutoCommit(true);  // Reset auto-commit mode
-                connection.close();
+            try {
+                // Delete encryption keys first (foreign key constraint)
+                statement.executeUpdate(
+                        "DELETE FROM encryption_keys WHERE file_id = '" + fileId + "'"
+                );
+                
+                // Delete chunk locations (foreign key constraint)
+                statement.executeUpdate(
+                        "DELETE FROM file_chunks WHERE file_id = '" + fileId + "'"
+                );
+                
+                // Finally delete the main file record
+                statement.executeUpdate(
+                        "DELETE FROM files WHERE file_id = '" + fileId + "'"
+                );
+                
+                // If we got here without exceptions, commit the transaction
+                connection.commit();
+                System.out.println("Successfully deleted metadata for file: " + fileId);
+                
+            } catch (SQLException e) {
+                // If anything goes wrong, roll back all changes
+                connection.rollback();
+                throw e;
             }
-        } catch (SQLException e) {
-            System.err.println("Error closing connection: " + e.getMessage());
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
+                    "Failed to delete file metadata: " + ex.getMessage(), ex);
+            throw new RuntimeException("Failed to delete file metadata", ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.setAutoCommit(true);  // Reset auto-commit mode
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("Error closing connection: " + e.getMessage());
+            }
         }
     }
-}
     
     /**
      * Retrieves all files from the database
@@ -269,25 +286,25 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
             
             while (rs.next()) {
                 FileMetadata metadata = new FileMetadata(
-                    rs.getString("file_id"),
-                    rs.getString("file_name"),
-                    rs.getString("owner_user"),
-                    rs.getLong("total_size")
+                        rs.getString("file_id"),
+                        rs.getString("file_name"),
+                        rs.getString("owner_user"),
+                        rs.getLong("total_size")
                 );
                 metadata.setShared(rs.getInt("is_shared") == 1);
                 
                 // Create a new statement for chunk queries
                 try (Statement chunkStmt = conn.createStatement()) {
                     ResultSet chunksRs = chunkStmt.executeQuery(
-                        "SELECT chunk_number, container_id FROM file_chunks " +
-                        "WHERE file_id = '" + metadata.getFileId() + "' " +
-                        "ORDER BY chunk_number"
+                            "SELECT chunk_number, container_id FROM file_chunks " +
+                                    "WHERE file_id = '" + metadata.getFileId() + "' " +
+                                            "ORDER BY chunk_number"
                     );
                     
                     while (chunksRs.next()) {
                         metadata.addChunkLocation(
-                            chunksRs.getInt("chunk_number"),
-                            chunksRs.getString("container_id")
+                                chunksRs.getInt("chunk_number"),
+                                chunksRs.getString("container_id")
                         );
                     }
                 }
@@ -504,10 +521,10 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
             try {
                 // Add file metadata
                 statement.executeUpdate(
-                    "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
-                    "VALUES ('" + metadata.getFileId() + "', '" + metadata.getFileName() + "', '" +
-                    metadata.getOwnerUser() + "', " + metadata.getTotalSize() + ", " +
-                    metadata.getTotalChunks() + ", " + (metadata.isShared() ? 1 : 0) + ")"
+                        "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
+                                "VALUES ('" + metadata.getFileId() + "', '" + metadata.getFileName() + "', '" +
+                                metadata.getOwnerUser() + "', " + metadata.getTotalSize() + ", " +
+                                metadata.getTotalChunks() + ", " + (metadata.isShared() ? 1 : 0) + ")"
                 );
                 
                 // Add chunk locations
@@ -515,8 +532,8 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
                     String containerId = metadata.getContainerForChunk(i);
                     if (containerId != null) {
                         statement.executeUpdate(
-                            "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
-                            "VALUES ('" + metadata.getFileId() + "', " + i + ", '" + containerId + "')"
+                                "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
+                                        "VALUES ('" + metadata.getFileId() + "', " + i + ", '" + containerId + "')"
                         );
                     }
                 }
@@ -532,8 +549,8 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
             }
             
         } catch (SQLException ex) {
-            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, 
-                "Failed to save file metadata: " + ex.getMessage(), ex);
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
+                    "Failed to save file metadata: " + ex.getMessage(), ex);
             throw new RuntimeException("Failed to save file metadata", ex);
         } finally {
             try {
@@ -597,6 +614,135 @@ public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
         }
         
         return null;
+    }
+    
+    /**
+     * Sets or updates permissions for a user on a file
+     */
+    public void setFilePermissions(String fileId, String userName, boolean canRead,
+            boolean canWrite, String grantedBy) throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            statement.executeUpdate(
+                    "INSERT OR REPLACE INTO file_permissions (file_id, user_name, can_read, can_write, granted_by) " +
+                            "VALUES ('" + fileId + "', '" + userName + "', " +
+                            (canRead ? 1 : 0) + ", " + (canWrite ? 1 : 0) + ", '" + grantedBy + "')"
+            );
+            
+            System.out.println("Updated permissions for user " + userName + " on file " + fileId);
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to set file permissions", ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Checks if a user has specific permission on a file
+     */
+    public boolean checkFilePermission(String fileId, String userName, String permission)
+            throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            // First check if user is the owner
+            ResultSet ownerRs = statement.executeQuery(
+                    "SELECT owner_user FROM files WHERE file_id = '" + fileId + "'"
+            );
+            
+            if (ownerRs.next() && userName.equals(ownerRs.getString("owner_user"))) {
+                return true;  // File owners have all permissions
+            }
+            
+            // Check explicit permissions
+            ResultSet rs = statement.executeQuery(
+                    "SELECT can_read, can_write FROM file_permissions " +
+                            "WHERE file_id = '" + fileId + "' AND user_name = '" + userName + "'"
+            );
+            
+            if (rs.next()) {
+                switch (permission.toLowerCase()) {
+                    case "read":
+                        return rs.getInt("can_read") == 1;
+                    case "write":
+                        return rs.getInt("can_write") == 1;
+                    default:
+                        return false;
+                }
+            }
+            
+            return false;  // No permissions found
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Gets list of users who have access to a file
+     */
+    public List<Map<String, Object>> getFileAccessList(String fileId) throws ClassNotFoundException {
+        List<Map<String, Object>> accessList = new ArrayList<>();
+        
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            ResultSet rs = statement.executeQuery(
+                    "SELECT user_name, can_read, can_write, date_granted, granted_by " +
+                            "FROM file_permissions WHERE file_id = '" + fileId + "' " +
+                                    "ORDER BY date_granted DESC"
+            );
+            
+            while (rs.next()) {
+                Map<String, Object> userAccess = new HashMap<>();
+                userAccess.put("userName", rs.getString("user_name"));
+                userAccess.put("canRead", rs.getInt("can_read") == 1);
+                userAccess.put("canWrite", rs.getInt("can_write") == 1);
+                userAccess.put("dateGranted", rs.getTimestamp("date_granted"));
+                userAccess.put("grantedBy", rs.getString("granted_by"));
+                accessList.add(userAccess);
+            }
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+        
+        return accessList;
     }
     
     public void storeEncryptionKey(String fileId, int chunkNumber, String keyString)

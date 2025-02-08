@@ -49,18 +49,24 @@ public class FileMetadata implements Serializable {
         totalChunks = Math.max(totalChunks, chunkNumber + 1);
     }
     
+    public void setPermissions(String userName, boolean canRead, boolean canWrite, String grantedBy)
+            throws ClassNotFoundException {
+        DB database = new DB();
+        database.setFilePermissions(this.fileId, userName, canRead, canWrite, grantedBy);
+    }
+    
     // Get the container ID for a specific chunk
     public String getContainerForChunk(int chunkNumber) {
         return chunkLocations.stream()
-            .filter(loc -> loc.getChunkNumber() == chunkNumber)
-            .map(ChunkLocation::getContainerId)
-            .findFirst()
-            .orElse(null);
+                .filter(loc -> loc.getChunkNumber() == chunkNumber)
+                .map(ChunkLocation::getContainerId)
+                .findFirst()
+                .orElse(null);
     }
     
     public void setTotalChunks(int totalChunks) {
-    this.totalChunks = totalChunks;
-}
+        this.totalChunks = totalChunks;
+    }
     
     // Getters and setters
     public String getFileId() { return fileId; }

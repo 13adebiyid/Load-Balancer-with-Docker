@@ -93,7 +93,6 @@ public class FileStorageContainer {
      * Retrieve a chunk of a file from this container
      * @param fileId Unique identifier for the file
      * @param chunkNumber The sequence number of the chunk to retrieve
-     * @param trafficLevel Affects the artificial delay (1.0 = normal)
      * @return The chunk data
      */
     public byte[] retrieveFileChunk(String fileId, int chunkNumber)
