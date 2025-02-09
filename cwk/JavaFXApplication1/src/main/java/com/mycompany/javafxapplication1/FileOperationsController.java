@@ -90,6 +90,23 @@ public class FileOperationsController {
         });
     }
     
+    @FXML
+    private void openRemoteTerminal() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("RemoteTerminal.fxml"));
+            Parent root = loader.load();
+            
+            Stage terminalStage = new Stage();
+            terminalStage.setTitle("Remote Container Terminal");
+            terminalStage.setScene(new Scene(root, 800, 600));
+            terminalStage.show();
+            
+        } catch (IOException e) {
+            showAlert(Alert.AlertType.ERROR, "Error",
+                    "Failed to open remote terminal: " + e.getMessage());
+        }
+    }
+    
     /**
      * Sets up the table columns with their cell value factories
      */
@@ -121,6 +138,9 @@ public class FileOperationsController {
         filesTable.setRowFactory(tv -> {
             TableRow<FileMetadata> row = new TableRow<>();
             ContextMenu contextMenu = new ContextMenu();
+            
+            MenuItem remoteTerminalItem = new MenuItem("Remote Terminal");
+            remoteTerminalItem.setOnAction(event -> openRemoteTerminal());
             
             MenuItem downloadItem = new MenuItem("Download");
             downloadItem.setOnAction(event -> {
@@ -162,13 +182,15 @@ public class FileOperationsController {
                 }
             });
             
-            contextMenu.getItems().addAll(downloadItem, deleteItem);
+            contextMenu.getItems().addAll(downloadItem, shareItem, accessItem, deleteItem, remoteTerminalItem);
             
             row.contextMenuProperty().bind(
                     javafx.beans.binding.Bindings.when(row.emptyProperty())
                             .then((ContextMenu) null)
                             .otherwise(contextMenu)
             );
+            
+            
             
             return row;
         });
@@ -269,6 +291,27 @@ public class FileOperationsController {
                 }
             }
         });
+    }
+    
+    @FXML
+    private void openTerminal() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("terminal.fxml"));
+            Parent root = loader.load();
+            
+            Stage terminalStage = new Stage();
+            terminalStage.setTitle("Terminal");
+            terminalStage.setScene(new Scene(root, 600, 400));
+            
+            // Make terminal window stay on top
+            terminalStage.setAlwaysOnTop(true);
+            
+            terminalStage.show();
+            
+        } catch (IOException e) {
+            showAlert(Alert.AlertType.ERROR, "Error",
+                    "Failed to open terminal: " + e.getMessage());
+        }
     }
     
     /**
@@ -444,81 +487,85 @@ public class FileOperationsController {
      * Uploads a file in chunks using the load balancer
      */
     private void uploadFileInChunks(File file, String fileId) throws IOException {
-        long totalSize = file.length();
-        System.out.println("Starting upload of file: " + file.getName() +
-                " (Size: " + totalSize + " bytes)");
+//        debug code
+        System.out.println("\nDebug: Starting upload process");
+        System.out.println("File: " + file.getName());
+        System.out.println("File ID: " + fileId);
+//        debug code
+
+        FileChunker chunker = new FileChunker();
+        int chunkSize = chunker.getOptimalChunkSize(file.length());
+        System.out.println("Optimal chunk size: " + chunkSize + " bytes");//        debug code
+
+        List<FileChunker.ChunkInfo> chunks = chunker.splitFile(file, chunkSize);
+        System.out.println("Total chunks created: " + chunks.size());//        debug code
         
-        try (FileInputStream fis = new FileInputStream(file)) {
-            byte[] buffer = new byte[CHUNK_SIZE];
-            int chunkNumber = 0;
-            long bytesProcessed = 0;
-            int bytesRead;
-            
-            while ((bytesRead = fis.read(buffer)) != -1 && !operationCancelled) {
-                byte[] chunk;
-                if (bytesRead < CHUNK_SIZE) {
-                    chunk = new byte[bytesRead];
-                    System.arraycopy(buffer, 0, chunk, 0, bytesRead);
-                } else {
-                    chunk = buffer.clone();
-                }
-                
-                System.out.println("Uploading chunk " + chunkNumber +
-                        " (size: " + bytesRead + " bytes)");
-                
-                boolean chunkUploaded = false;
-                int retries = 0;
-                
-                while (!chunkUploaded && !operationCancelled) {
-                    try {
-                        String containerId = loadBalancerClient.uploadFileChunk(
-                                fileId, chunkNumber, chunk
-                        );
-                        
-                        if (containerId != null) {
-                            recordChunkLocation(fileId, chunkNumber, containerId);
-                            bytesProcessed += bytesRead;
-                            chunkUploaded = true;
-                            
-                            final double progress = (double) bytesProcessed / totalSize;
-                            Platform.runLater(() -> updateProgress(progress));
-                            
-                            // Simulate network delay (30-90 seconds)
-                            Thread.sleep(30000 + new Random().nextInt(60000));
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Error uploading chunk " + chunkNumber +
-                                ": " + e.getMessage());
-                        
-                    }
-                }
-                
-                if (operationCancelled) {
-                    System.out.println("Upload cancelled by user");
-                    break;
-                }
-                
-                chunkNumber++;
+        long totalSize = file.length();
+        long bytesProcessed = 0;
+        
+        for (FileChunker.ChunkInfo chunk : chunks) {
+            System.out.println("\nProcessing chunk " + chunk.getNumber());//        debug code
+            if (operationCancelled) {
+                System.out.println("Upload cancelled by user");
+                break;
             }
             
-            if (!operationCancelled) {
-                FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, totalSize);
-                metadata.setTotalChunks(chunkNumber);
-                
-                for (int i = 0; i < chunkNumber; i++) {
-                    if (fileContainerMap.containsKey(fileId) && i < fileContainerMap.get(fileId).size()) {
-                        metadata.addChunkLocation(i, fileContainerMap.get(fileId).get(i));
-                    }
-                }
-                
+            String containerId = null;
+            try {
+                containerId = loadBalancerClient.uploadFileChunk(
+                        fileId,
+                        chunk.getNumber(),
+                        chunk.getData()
+                );
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            
+            if (containerId != null) {
+                System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);//        debug code
+                recordChunkLocation(fileId, chunk.getNumber(), containerId);
                 try {
-                    database.saveFileMetadata(metadata);
-                    System.out.println("Saved metadata for file: " + file.getName());
+                    // Store encryption key
+                    database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
+                    System.out.println("Encryption key stored for chunk " + chunk.getNumber());//        debug code
                 } catch (ClassNotFoundException ex) {
-                    throw new IOException("Failed to save metadata: " + ex.getMessage());
+                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                
+                bytesProcessed += chunk.getSize();
+                final double progress = (double) bytesProcessed / totalSize;
+                Platform.runLater(() -> updateProgress(progress));
+            }
+        }
+        
+        // Save metadata
+        if (!operationCancelled) {
+            FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, totalSize);
+            metadata.setTotalChunks(chunks.size());
+            
+            for (int i = 0; i < chunks.size(); i++) {
+                String containerId = fileContainerMap.get(fileId).get(i);
+                if (containerId != null) {
+                    metadata.addChunkLocation(i, containerId);
                 }
             }
-        }}
+            
+            try {
+                database.saveFileMetadata(metadata);
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        
+        //        debug code
+        System.out.println("\nDebug: Upload process completed");
+        System.out.println("Chunks distribution:");
+        for (int i = 0; i < chunks.size(); i++) {
+            String containerId = fileContainerMap.get(fileId).get(i);
+            System.out.println("Chunk " + i + " -> Container: " + containerId);
+        }
+        //        debug code
+    }
     
     // Helper method to show alerts on the JavaFX Application Thread
     private void showAlert(Alert.AlertType type, String title, String message) {
@@ -549,71 +596,36 @@ public class FileOperationsController {
             throw new IOException("File metadata not found");
         }
         
-        System.out.println("\nDebug info for download:");
-        System.out.println("File ID: " + fileId);
-        System.out.println("File name: " + metadata.getFileName());
-        System.out.println("Total chunks: " + metadata.getTotalChunks());
-        System.out.println("Total size: " + metadata.getTotalSize() + " bytes");
-        System.out.println("Owner: " + metadata.getOwnerUser());
-        System.out.println("Chunk locations:");
-        for (int i = 0; i < metadata.getTotalChunks(); i++) {
-            String containerId = metadata.getContainerForChunk(i);
-            System.out.println("Chunk " + i + ": Container " + containerId);
+        List<FileChunker.ChunkInfo> chunks = new ArrayList<>();
+        long bytesProcessed = 0;
+        
+        for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
+            if (operationCancelled) break;
+            
+            byte[] chunkData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
+            String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
+            
+            // Create chunk info (checksum will be verified during reassembly)
+            FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
+                    chunkNumber,
+                    chunkData.length,
+                    "", // Checksum will be recalculated
+                    encryptionKey,
+                    chunkData
+            );
+            
+            chunks.add(chunk);
+            bytesProcessed += chunkData.length;
+            
+            final double progress = (double) bytesProcessed / metadata.getTotalSize();
+            Platform.runLater(() -> updateProgress(progress));
         }
         
-        System.out.println("Starting download of file: " + metadata.getFileName() +
-                " (Total chunks: " + metadata.getTotalChunks() + ")");
-        
-        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
-            long bytesProcessed = 0;
-            
-            for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
-                if (operationCancelled) {
-                    System.out.println("Download cancelled by user");
-                    break;
-                }
-                
-                System.out.println("Downloading chunk " + chunkNumber);
-                boolean chunkDownloaded = false;
-                int retries = 0;
-                
-                while (!chunkDownloaded && !operationCancelled) {
-                    try {
-                        byte[] chunkData = loadBalancerClient.downloadFileChunk(
-                                fileId, chunkNumber
-                        );
-                        
-                        if (chunkData != null) {
-                            // Write the chunk data with proper flushing
-                            fos.write(chunkData);
-                            fos.flush();
-                            fos.getFD().sync();  // Force write to disk
-                            
-                            bytesProcessed += chunkData.length;
-                            chunkDownloaded = true;
-                            
-                            final double progress = (double) bytesProcessed / metadata.getTotalSize();
-                            Platform.runLater(() -> updateProgress(progress));
-                            
-                            System.out.println("Downloaded chunk " + chunkNumber +
-                                    " (size: " + chunkData.length + " bytes)");
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Error downloading chunk " + chunkNumber +
-                                ": " + e.getMessage());
-                        
-                    }
-                }
-            }
-            
-            // Final flush and sync after all chunks are written
-            fos.flush();
-            fos.getFD().sync();
-            
-            if (!operationCancelled) {
-                System.out.println("Download complete. Total bytes: " + bytesProcessed);
-            }
-        }}
+        if (!operationCancelled) {
+            FileChunker chunker = new FileChunker();
+            chunker.reassembleFile(chunks, outputFile);
+        }
+    }
     
     /**
      * Returns to the main menu

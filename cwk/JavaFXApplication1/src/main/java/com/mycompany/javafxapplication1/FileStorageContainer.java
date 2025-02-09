@@ -60,14 +60,12 @@ public class FileStorageContainer {
     public void storeFileChunk(String fileId, int chunkNumber, byte[] data)
             throws IOException, InterruptedException {
         
-        // First, construct the path where the chunk will be stored
-        // We use File.separator to ensure correct path separators on different operating systems
         String chunkPath = storagePath + File.separator + fileId + "_chunk_" + chunkNumber;
         
         // Create encryption instance
         FileEncryption encryption = new FileEncryption();
         
-        // Encrypt the chunk data
+        // Encrypt chunk data
         byte[] encryptedData = encryption.encryptData(data);
         if (encryptedData == null) {
             throw new IOException("Failed to encrypt chunk data");
