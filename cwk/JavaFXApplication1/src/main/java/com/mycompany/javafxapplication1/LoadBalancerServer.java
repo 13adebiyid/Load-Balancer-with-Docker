@@ -32,8 +32,7 @@ public class LoadBalancerServer {
                 
                 while (running) {
                     Socket clientSocket = serverSocket.accept();
-                    System.out.println("New client connection accepted from: " +
-                            clientSocket.getInetAddress());
+                    System.out.println("New client connection accepted from: " + clientSocket.getInetAddress());
                     executorService.submit(() -> handleClient(clientSocket));
                 }
                 
@@ -60,8 +59,7 @@ public class LoadBalancerServer {
             
             // Read the operation request
             FileOperation operation = (FileOperation) in.readObject();
-            System.out.println("Received operation: " + operation.getType() +
-                    " for file: " + operation.getFileId());
+            System.out.println("Received operation: " + operation.getType() + " for file: " + operation.getFileId());
             
             // Get next container from load balancer
             FileStorageContainer container = loadBalancer.getNextContainer();
@@ -69,7 +67,6 @@ public class LoadBalancerServer {
                 sendErrorResponse(out, "No available containers");
                 return;
             }
-            
             
             // Send container ID to client
             out.writeObject(container.getId());
@@ -109,9 +106,7 @@ public class LoadBalancerServer {
             // Read the file data
             
             //debug code
-            System.out.println("Handling upload for file: " + operation.getFileId() +
-                    ", chunk: " + operation.getChunkNumber() +
-                    " to container: " + container.getId());
+            System.out.println("Handling upload for file: " + operation.getFileId() + ", chunk: " + operation.getChunkNumber() + " to container: " + container.getId());
             
             int dataLength = operation.getChunkSize();
             if (dataLength <= 0) {

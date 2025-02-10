@@ -131,28 +131,6 @@ public class LoadBalancer {
     }
     
     /**
-     * Simulate network delay based on traffic level
-     * @param trafficLevel LOW, MEDIUM, or HIGH
-     */
-    public void simulateDelay(String trafficLevel) {
-        int baseDelay = 30000 + random.nextInt(60000);
-        
-        int finalDelay = baseDelay;
-        if (trafficLevel.equals("HIGH")) {
-            finalDelay = (int)(baseDelay * 1.5);
-        }
-        else if (trafficLevel.equals("LOW")) {
-            finalDelay = (int)(baseDelay * 0.5);
-        }
-        
-        try {
-            Thread.sleep(finalDelay);
-        } catch (InterruptedException e) {
-            System.out.println("Delay interrupted");
-        }
-    }
-    
-    /**
      * Update the health status of a container
      * @param containerId The container's ID
      * @param isHealthy The container's health status
