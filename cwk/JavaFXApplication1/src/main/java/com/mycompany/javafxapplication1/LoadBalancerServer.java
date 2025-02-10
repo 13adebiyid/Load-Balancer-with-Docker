@@ -86,6 +86,10 @@ public class LoadBalancerServer {
                 default:
                     sendErrorResponse(out, "Unknown operation type: " + operation.getType());
             }
+            //debug code
+            System.out.println("Connection from: " + clientSocket.getInetAddress());
+            System.out.println("Using container: " + container.getId());
+
             
         } catch (EOFException e) {
             System.out.println("Client disconnected normally: " + clientSocket.getInetAddress());
@@ -95,6 +99,7 @@ public class LoadBalancerServer {
             System.err.println("Error handling client: " + e.getMessage());
             e.printStackTrace();
         }
+        
     }
     
     private void handleUpload(FileOperation operation, FileStorageContainer container,
@@ -129,6 +134,7 @@ public class LoadBalancerServer {
             out.flush();
             
             System.out.println("Successfully stored chunk " + operation.getChunkNumber());
+         
             
         } catch (Exception e) {
             System.err.println("Upload failed: " + e.getMessage());

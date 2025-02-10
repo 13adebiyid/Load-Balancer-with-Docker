@@ -47,6 +47,13 @@ public class DB {
     private int iterations = 10000;
     private int keylength = 256;
     private String saltValue;
+    private static final String MYSQL_HOST = "comp20081-mysql-db";
+    private static final String MYSQL_PORT = "3306";
+    private static final String MYSQL_DATABASE = "comp20081";
+    private static final String MYSQL_USER = "root";
+    private static final String MYSQL_PASSWORD = "root";
+    
+    
     
     /**
      * Constructor - initializes the database and creates required tables
@@ -785,6 +792,24 @@ public class DB {
         }
         
         return null;
+    }
+    
+    private String getMySQLUrl() {
+        return String.format("jdbc:mysql://%s:%s/%s", 
+            MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE);
+    }
+    
+    // Add method to test MySQL connection
+    public boolean testMySQLConnection() {
+        try {
+            Connection conn = DriverManager.getConnection(
+                getMySQLUrl(), MYSQL_USER, MYSQL_PASSWORD);
+            conn.close();
+            return true;
+        } catch (SQLException e) {
+            System.err.println("MySQL connection failed: " + e.getMessage());
+            return false;
+        }
     }
     
 }

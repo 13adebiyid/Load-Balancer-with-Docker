@@ -25,11 +25,28 @@ public class FileStorageContainer {
      */
     public FileStorageContainer(String containerId, String storagePath) {
         this.containerId = containerId;
-        this.storagePath = new File(System.getProperty("user.home"), storagePath).getAbsolutePath();
+        
+        // Map container IDs to their Docker container paths
+        switch(containerId) {
+            case "container-1":
+                this.storagePath = "/storage/container1";
+                break;
+            case "container-2":
+                this.storagePath = "/storage/container2";
+                break;
+            case "container-3":
+                this.storagePath = "/storage/container3";
+                break;
+            case "container-4":
+                this.storagePath = "/storage/container4";
+                break;
+            default:
+                this.storagePath = storagePath;
+        }
         this.activeConnections = new AtomicInteger(0);
         this.random = new Random();
         
-        // Create the storage directory if it doesn't exist
+        // Create storage directory
         File storage = new File(this.storagePath);
         if (!storage.exists()) {
             boolean created = storage.mkdirs();

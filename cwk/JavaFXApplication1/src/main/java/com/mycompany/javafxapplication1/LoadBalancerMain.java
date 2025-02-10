@@ -8,16 +8,19 @@ public class LoadBalancerMain {
     public static void main(String[] args) {
         System.out.println("Starting Load Balancer service...");
         
-        // Create and initialize the load balancer
         LoadBalancer loadBalancer = new LoadBalancer();
         
-        // Add initial storage containers
-        for (int i = 1; i <= 4; i++) {
-            FileStorageContainer container = new FileStorageContainer("container-" + i,"/storage/container" + i);
-            loadBalancer.addContainer(container);
-        }
+        // Add containers using Docker container paths
+        loadBalancer.addContainer(new FileStorageContainer(
+            "container-1", "/storage/container1"));
+        loadBalancer.addContainer(new FileStorageContainer(
+            "container-2", "/storage/container2"));
+        loadBalancer.addContainer(new FileStorageContainer(
+            "container-3", "/storage/container3"));
+        loadBalancer.addContainer(new FileStorageContainer(
+            "container-4", "/storage/container4"));
         
-        // Start the network server (default port 8080)
+        // Start network server
         LoadBalancerServer server = new LoadBalancerServer(8080, loadBalancer);
         server.start();
         
