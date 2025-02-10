@@ -26,38 +26,31 @@ public class FileStorageContainer {
     public FileStorageContainer(String containerId, String storagePath) {
         this.containerId = containerId;
         
-        // Map container IDs to their Docker container paths
-        switch(containerId) {
-            case "container-1":
-                this.storagePath = "/storage/container1";
-                break;
-            case "container-2":
-                this.storagePath = "/storage/container2";
-                break;
-            case "container-3":
-                this.storagePath = "/storage/container3";
-                break;
-            case "container-4":
-                this.storagePath = "/storage/container4";
-                break;
-            default:
-                this.storagePath = storagePath;
-        }
-        this.activeConnections = new AtomicInteger(0);
-        this.random = new Random();
+        String envPath = System.getenv("STORAGE_PATH");
+        this.storagePath = envPath != null ? envPath : storagePath;
         
-        // Create storage directory
+        System.out.println("Setting up storage container " + containerId + " with path: " + this.storagePath);
+        
+        // Create storage directory with full permissions
         File storage = new File(this.storagePath);
         if (!storage.exists()) {
             boolean created = storage.mkdirs();
             if (!created) {
                 System.err.println("Failed to create storage directory: " + this.storagePath);
             } else {
-                System.out.println("Created storage directory: " + this.storagePath);
+                storage.setWritable(true, false);
+                storage.setReadable(true, false);
+                storage.setExecutable(true, false);
+                System.out.println("Created storage directory with full permissions: " + this.storagePath);
             }
         }
         
-        // Ensuring directory is writable
+        this.activeConnections = new AtomicInteger(0);
+        this.random = new Random();
+        
+       
+        
+        // Ensuring directory is writable for debugging
         if (!storage.canWrite()) {
             System.err.println("Warning: Storage directory is not writable: " + this.storagePath);
         }

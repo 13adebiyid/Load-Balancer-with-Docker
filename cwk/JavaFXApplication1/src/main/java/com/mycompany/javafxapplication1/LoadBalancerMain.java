@@ -11,14 +11,10 @@ public class LoadBalancerMain {
         LoadBalancer loadBalancer = new LoadBalancer();
         
         // Add containers using Docker container paths
-        loadBalancer.addContainer(new FileStorageContainer(
-            "container-1", "/storage/container1"));
-        loadBalancer.addContainer(new FileStorageContainer(
-            "container-2", "/storage/container2"));
-        loadBalancer.addContainer(new FileStorageContainer(
-            "container-3", "/storage/container3"));
-        loadBalancer.addContainer(new FileStorageContainer(
-            "container-4", "/storage/container4"));
+        loadBalancer.addContainer(new FileStorageContainer("container-1", "/storage/container1"));
+        loadBalancer.addContainer(new FileStorageContainer("container-2", "/storage/container2"));
+        loadBalancer.addContainer(new FileStorageContainer("container-3", "/storage/container3"));
+        loadBalancer.addContainer(new FileStorageContainer("container-4", "/storage/container4"));
         
         // Start network server
         LoadBalancerServer server = new LoadBalancerServer(8080, loadBalancer);

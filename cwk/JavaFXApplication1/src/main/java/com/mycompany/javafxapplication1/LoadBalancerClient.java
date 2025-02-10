@@ -15,8 +15,6 @@ public class LoadBalancerClient {
     private int port;
     private boolean isConnected;
     private Random random;
-    private static final String LOAD_BALANCER_HOST = System.getenv().getOrDefault("LOAD_BALANCER_HOST", "comp20081-load-balancer");
-    private static final int LOAD_BALANCER_PORT = 8080;
     
     // Constants for networking and delays
     private static final int CONNECTION_TIMEOUT = 120000; // 2 minutes to account for artificial delays
@@ -28,13 +26,12 @@ public class LoadBalancerClient {
      * @param port The server port number
      */
     public LoadBalancerClient(String host, int port) {
-        this.host = LOAD_BALANCER_HOST;
-        this.port = LOAD_BALANCER_PORT;
+        this.host = "load-balancer";
+        this.port = 8080;
         
         //debug code
         System.out.println("Initializing LoadBalancerClient with host: " + host + ", port: " + port);
-        
-        this.random = new Random();
+
         this.isConnected = false;
         this.random = new Random();
         testConnection();  // Initial connection test
@@ -150,12 +147,15 @@ public class LoadBalancerClient {
      */
     public boolean testConnection() {
         try (Socket socket = new Socket()) {
+            System.out.println("Attempting to connect to " + host + ":" + port);
             socket.connect(new InetSocketAddress(host, port), CONNECTION_TIMEOUT);
             isConnected = true;
+            System.out.println("Successfully connected to load balancer");
             return true;
         } catch (IOException e) {
             isConnected = false;
             System.err.println("Cannot connect to server: " + e.getMessage());
+            e.printStackTrace(); // Add this for more detailed error information
             return false;
         }
     }
