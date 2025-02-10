@@ -18,16 +18,16 @@ import javafx.scene.control.TextField;
 import javafx.scene.paint.Color;
 
 public class PrimaryController {
-
+    
     @FXML
     private Button registerBtn;
-
+    
     @FXML
     private TextField userTextField;
-
+    
     @FXML
     private PasswordField passPasswordField;
-
+    
     @FXML
     private void registerBtnHandler(ActionEvent event) {
         Stage secondaryStage = new Stage();
@@ -51,15 +51,15 @@ public class PrimaryController {
         Stage secondaryStage = new Stage();
         Group root = new Group();
         Scene scene = new Scene(root, 300, 300, Color.DARKGRAY);
-
+        
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Confirmation Dialog");
         alert.setHeaderText(headerMsg);
         alert.setContentText(contentMsg);
-
+        
         Optional<ButtonType> result = alert.showAndWait();
     }
-
+    
     @FXML
     private void switchToSecondary() {
         Stage secondaryStage = new Stage();
@@ -84,7 +84,7 @@ public class PrimaryController {
             else{
                 dialogue("Invalid User Name / Password","Please try again!");
             }
-
+            
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -29,15 +29,15 @@ public class FilePermissions {
                 
                 // Create permissions table with foreign key constraints
                 stmt.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS file_permissions (" +
-                    "file_id TEXT, " +
-                    "user_name TEXT, " +
-                    "can_read INTEGER DEFAULT 0, " +
-                    "can_write INTEGER DEFAULT 0, " +
-                    "date_granted TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "granted_by TEXT, " +
-                    "PRIMARY KEY (file_id, user_name), " +
-                    "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
+                        "CREATE TABLE IF NOT EXISTS file_permissions (" +
+                                "file_id TEXT, " +
+                                "user_name TEXT, " +
+                                "can_read INTEGER DEFAULT 0, " +
+                                "can_write INTEGER DEFAULT 0, " +
+                                "date_granted TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                                "granted_by TEXT, " +
+                                "PRIMARY KEY (file_id, user_name), " +
+                                "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
                 );
                 
                 logger.info("Permissions table initialized successfully");
@@ -56,12 +56,12 @@ public class FilePermissions {
      * @param canWrite Whether the user can modify the file
      * @param grantedBy The username of the user granting these permissions
      */
-    public void setPermissions(String fileId, String userName, boolean canRead, 
-                             boolean canWrite, String grantedBy) {
+    public void setPermissions(String fileId, String userName, boolean canRead,
+            boolean canWrite, String grantedBy) {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:comp20081.db")) {
             String sql = "INSERT OR REPLACE INTO file_permissions " +
-                        "(file_id, user_name, can_read, can_write, granted_by) " +
-                        "VALUES (?, ?, ?, ?, ?)";
+                    "(file_id, user_name, can_read, can_write, granted_by) " +
+                    "VALUES (?, ?, ?, ?, ?)";
             
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                 pstmt.setString(1, fileId);
@@ -72,7 +72,7 @@ public class FilePermissions {
                 pstmt.executeUpdate();
                 
                 logger.info(String.format("Set permissions for user %s on file %s: read=%b, write=%b",
-                    userName, fileId, canRead, canWrite));
+                        userName, fileId, canRead, canWrite));
             }
         } catch (SQLException e) {
             logger.severe("Failed to set permissions: " + e.getMessage());
@@ -101,7 +101,7 @@ public class FilePermissions {
             
             // Check explicit permissions
             String sql = "SELECT can_read, can_write FROM file_permissions " +
-                        "WHERE file_id = ? AND user_name = ?";
+                    "WHERE file_id = ? AND user_name = ?";
             
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                 pstmt.setString(1, fileId);
@@ -136,8 +136,8 @@ public class FilePermissions {
         
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:comp20081.db")) {
             String sql = "SELECT user_name, can_read, can_write, date_granted, granted_by " +
-                        "FROM file_permissions WHERE file_id = ? " +
-                        "ORDER BY date_granted DESC";
+                    "FROM file_permissions WHERE file_id = ? " +
+                    "ORDER BY date_granted DESC";
             
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                 pstmt.setString(1, fileId);
@@ -173,8 +173,8 @@ public class FilePermissions {
                 pstmt.setString(1, fileId);
                 int count = pstmt.executeUpdate();
                 
-                logger.info(String.format("Removed %d permission entries for file %s", 
-                    count, fileId));
+                logger.info(String.format("Removed %d permission entries for file %s",
+                        count, fileId));
             }
         } catch (SQLException e) {
             logger.severe("Failed to remove permissions: " + e.getMessage());
@@ -189,12 +189,12 @@ public class FilePermissions {
      * @param revokeRead Whether to revoke read permission
      * @param revokeWrite Whether to revoke write permission
      */
-    public void revokePermissions(String fileId, String userName, 
-                                boolean revokeRead, boolean revokeWrite) {
+    public void revokePermissions(String fileId, String userName,
+            boolean revokeRead, boolean revokeWrite) {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:comp20081.db")) {
             // First get current permissions
             String getSql = "SELECT can_read, can_write FROM file_permissions " +
-                          "WHERE file_id = ? AND user_name = ?";
+                    "WHERE file_id = ? AND user_name = ?";
             
             boolean currentRead = false;
             boolean currentWrite = false;
@@ -217,7 +217,7 @@ public class FilePermissions {
             // If both permissions are being revoked, delete the entry
             if (!newRead && !newWrite) {
                 String deleteSql = "DELETE FROM file_permissions " +
-                                 "WHERE file_id = ? AND user_name = ?";
+                        "WHERE file_id = ? AND user_name = ?";
                 try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
                     deleteStmt.setString(1, fileId);
                     deleteStmt.setString(2, userName);
@@ -226,7 +226,7 @@ public class FilePermissions {
             } else {
                 // Otherwise update the permissions
                 String updateSql = "UPDATE file_permissions SET can_read = ?, can_write = ? " +
-                                 "WHERE file_id = ? AND user_name = ?";
+                        "WHERE file_id = ? AND user_name = ?";
                 try (PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
                     updateStmt.setInt(1, newRead ? 1 : 0);
                     updateStmt.setInt(2, newWrite ? 1 : 0);
@@ -237,8 +237,8 @@ public class FilePermissions {
             }
             
             logger.info(String.format("Revoked permissions for user %s on file %s: read=%b, write=%b",
-                userName, fileId, revokeRead, revokeWrite));
-                
+                    userName, fileId, revokeRead, revokeWrite));
+            
         } catch (SQLException e) {
             logger.severe("Failed to revoke permissions: " + e.getMessage());
             throw new RuntimeException("Failed to revoke permissions", e);

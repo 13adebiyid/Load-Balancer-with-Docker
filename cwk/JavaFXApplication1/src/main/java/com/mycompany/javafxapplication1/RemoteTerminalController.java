@@ -24,8 +24,8 @@ public class RemoteTerminalController {
         
         // Initialize container list
         containerComboBox.getItems().addAll(
-            "container-1", "container-2", 
-            "container-3", "container-4"
+                "container-1", "container-2",
+                "container-3", "container-4"
         );
         
         // Handle command input
@@ -113,8 +113,7 @@ public class RemoteTerminalController {
     private void updateConnectionStatus(boolean connected) {
         Platform.runLater(() -> {
             statusLabel.setText(connected ? "Connected" : "Not Connected");
-            statusLabel.setStyle(connected ? 
-                "-fx-text-fill: green;" : "-fx-text-fill: red;");
+            statusLabel.setStyle(connected ?"-fx-text-fill: green;" : "-fx-text-fill: red;");
             connectButton.setText(connected ? "Disconnect" : "Connect");
             commandInput.setDisable(!connected);
         });

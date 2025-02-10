@@ -100,13 +100,12 @@ public class DB {
             statement.executeUpdate("create table if not exists " + dataBaseTableName +
                     "(id integer primary key autoincrement, name string, password string)");
             
-            // Add this to your createTables() method, after the encryption_keys table
             statement.executeUpdate(
                     "create table if not exists file_permissions (" +
                             "file_id text," +                       // Links to files table
                             "user_name text," +                     // User who has permission
-                            "can_read integer default 0," +         // Read permission (0=false, 1=true)
-                            "can_write integer default 0," +        // Write permission (0=false, 1=true)
+                            "can_read integer default 0," +         // Read permission 
+                            "can_write integer default 0," +        // Write permission 
                             "date_granted timestamp default current_timestamp," + // When permission was granted
                             "granted_by text," +                    // Who granted the permission
                             "primary key (file_id, user_name)," +
@@ -116,7 +115,6 @@ public class DB {
             
             
             // Create files table to track overall file information
-            // This stores metadata about each file in the system
             statement.executeUpdate(
                     "create table if not exists files (" +
                             "file_id text primary key," +           // Unique identifier for each file
@@ -124,12 +122,11 @@ public class DB {
                             "owner_user text not null," +           // User who owns this file
                             "total_size integer not null," +        // Total size in bytes
                             "total_chunks integer not null," +      // Number of chunks file is split into
-                            "is_shared integer default 0" +         // Whether file is shared (0=false, 1=true)
+                            "is_shared integer default 0" +         // Whether file is shared 
                             ")"
             );
             
             // Create file_chunks table to track chunk distribution
-            // This maps each chunk to its container location
             statement.executeUpdate(
                     "create table if not exists file_chunks (" +
                             "file_id text," +                       // Links to files table
@@ -141,12 +138,11 @@ public class DB {
             );
             
             // Create encryption_keys table for secure storage
-            // This stores encryption keys for each file chunk
             statement.executeUpdate(
                     "create table if not exists encryption_keys (" +
                             "file_id text," +                       // Links to files table
                             "chunk_number integer," +               // Which chunk this key is for
-                            "key_string text not null," +           // The encryption key itself
+                            "key_string text not null," +           //encryption key 
                             "primary key (file_id, chunk_number)," +
                             "foreign key (file_id) references files(file_id)" +
                             ")"
@@ -181,7 +177,6 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            // Check if this is a first-time initialization
             ResultSet tables = connection.getMetaData().getTables(null, null, "files", null);
             boolean needsInitialization = !tables.next();
             
@@ -219,33 +214,27 @@ public class DB {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
             
-            // Use a transaction to ensure all related records are deleted atomically
             connection.setAutoCommit(false);
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
             try {
-                // Delete encryption keys first (foreign key constraint)
                 statement.executeUpdate(
                         "DELETE FROM encryption_keys WHERE file_id = '" + fileId + "'"
                 );
                 
-                // Delete chunk locations (foreign key constraint)
                 statement.executeUpdate(
                         "DELETE FROM file_chunks WHERE file_id = '" + fileId + "'"
                 );
                 
-                // Finally delete the main file record
                 statement.executeUpdate(
                         "DELETE FROM files WHERE file_id = '" + fileId + "'"
                 );
                 
-                // If we got here without exceptions, commit the transaction
                 connection.commit();
                 System.out.println("Successfully deleted metadata for file: " + fileId);
                 
             } catch (SQLException e) {
-                // If anything goes wrong, roll back all changes
                 connection.rollback();
                 throw e;
             }
@@ -281,7 +270,6 @@ public class DB {
             stmt = conn.createStatement();
             stmt.setQueryTimeout(timeout);
             
-            // First get all files
             ResultSet rs = stmt.executeQuery("SELECT * FROM files");
             
             while (rs.next()) {
@@ -293,7 +281,6 @@ public class DB {
                 );
                 metadata.setShared(rs.getInt("is_shared") == 1);
                 
-                // Create a new statement for chunk queries
                 try (Statement chunkStmt = conn.createStatement()) {
                     ResultSet chunksRs = chunkStmt.executeQuery(
                             "SELECT chunk_number, container_id FROM file_chunks " +
@@ -333,7 +320,6 @@ public class DB {
      */
     public void delTable(String tableName) throws ClassNotFoundException {
         try {
-            // create a database connection
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
             var statement = connection.createStatement();
@@ -347,7 +333,6 @@ public class DB {
                     connection.close();
                 }
             } catch (SQLException e) {
-                // connection close failed.
                 System.err.println(e.getMessage());
             }
         }
@@ -381,7 +366,6 @@ public class DB {
                         connection.close();
                     }
                 } catch (SQLException e) {
-                    // connection close failed.
                     System.err.println(e.getMessage());
                 }
             }
@@ -401,7 +385,6 @@ public class DB {
             statement.setQueryTimeout(timeout);
             ResultSet rs = statement.executeQuery("select * from " + this.dataBaseTableName);
             while (rs.next()) {
-                // read the result set
                 result.add(new User(rs.getString("name"),rs.getString("password")));
             }
             
@@ -413,7 +396,6 @@ public class DB {
                     connection.close();
                 }
             } catch (SQLException e) {
-                // connection close failed.
                 System.err.println(e.getMessage());
             }
         }
@@ -435,7 +417,7 @@ public class DB {
             statement.setQueryTimeout(timeout);
             ResultSet rs = statement.executeQuery("select name, password from " + this.dataBaseTableName);
             String inPass = generateSecurePassword(pass);
-            // Let's iterate through the java ResultSet
+
             while (rs.next()) {
                 if (user.equals(rs.getString("name")) && rs.getString("password").equals(inPass)) {
                     flag = true;
@@ -450,7 +432,6 @@ public class DB {
                     connection.close();
                 }
             } catch (SQLException e) {
-                // connection close failed.
                 System.err.println(e.getMessage());
             }
         }
@@ -468,7 +449,7 @@ public class DB {
         return new String(finalval);
     }
     
-    /* Method to generate the hash value */
+    /* Method that generates hash value */
     private byte[] hash(char[] password, byte[] salt) throws InvalidKeySpecException {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keylength);
         Arrays.fill(password, Character.MIN_VALUE);
@@ -538,12 +519,11 @@ public class DB {
                     }
                 }
                 
-                // If we get here, everything worked, so commit the transaction
                 connection.commit();
                 System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
                 
             } catch (SQLException e) {
-                // If anything fails, roll back the entire transaction
+                // If fail, rolls back the entire transaction
                 connection.rollback();
                 throw e;
             }
@@ -555,7 +535,7 @@ public class DB {
         } finally {
             try {
                 if (connection != null) {
-                    connection.setAutoCommit(true);  // Reset auto-commit
+                    connection.setAutoCommit(true);  
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -585,7 +565,6 @@ public class DB {
                 
                 metadata.setShared(rs.getInt("is_shared") == 1);
                 
-                // Get chunk locations
                 ResultSet chunksRs = statement.executeQuery(
                         "SELECT chunk_number, container_id FROM file_chunks " +
                                 "WHERE file_id = '" + fileId + "' ORDER BY chunk_number"
@@ -660,16 +639,16 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            // First check if user is the owner
+            //check if user is the owner
             ResultSet ownerRs = statement.executeQuery(
                     "SELECT owner_user FROM files WHERE file_id = '" + fileId + "'"
             );
             
             if (ownerRs.next() && userName.equals(ownerRs.getString("owner_user"))) {
-                return true;  // File owners have all permissions
+                return true;  
             }
             
-            // Check explicit permissions
+            // Check other permissions
             ResultSet rs = statement.executeQuery(
                     "SELECT can_read, can_write FROM file_permissions " +
                             "WHERE file_id = '" + fileId + "' AND user_name = '" + userName + "'"
@@ -686,7 +665,7 @@ public class DB {
                 }
             }
             
-            return false;  // No permissions found
+            return false; 
             
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);

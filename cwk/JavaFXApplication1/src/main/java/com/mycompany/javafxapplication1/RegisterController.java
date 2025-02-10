@@ -1,7 +1,7 @@
 /*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/javafx/FXMLController.java to edit this template
- */
+* Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+* Click nbfs://nbhost/SystemFileSystem/Templates/javafx/FXMLController.java to edit this template
+*/
 package com.mycompany.javafxapplication1;
 
 import java.io.File;
@@ -30,22 +30,22 @@ import javafx.stage.Stage;
  * @author ntu-user
  */
 public class RegisterController {
-
+    
     /**
      * Initializes the controller class.
      */
     @FXML
     private Button registerBtn;
-
+    
     @FXML
     private Button backLoginBtn;
-
+    
     @FXML
     private PasswordField passPasswordField;
-
+    
     @FXML
     private PasswordField rePassPasswordField;
-
+    
     @FXML
     private TextField userTextField;
     
@@ -59,7 +59,7 @@ public class RegisterController {
     private void selectBtnHandler(ActionEvent event) throws IOException {
         Stage primaryStage = (Stage) selectBtn.getScene().getWindow();
         primaryStage.setTitle("Select a File");
-
+        
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Open Resource File");
         File selectedFile = fileChooser.showOpenDialog(primaryStage);
@@ -69,7 +69,7 @@ public class RegisterController {
         }
         
     }
-
+    
     private void dialogue(String headerMsg, String contentMsg) {
         Stage secondaryStage = new Stage();
         Group root = new Group();
@@ -80,7 +80,7 @@ public class RegisterController {
         alert.setContentText(contentMsg);
         Optional<ButtonType> result = alert.showAndWait();
     }
-
+    
     @FXML
     private void registerBtnHandler(ActionEvent event) {
         Stage secondaryStage = new Stage();
@@ -110,12 +110,12 @@ public class RegisterController {
             }
             secondaryStage.show();
             primaryStage.close();
-
+            
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
+    
     @FXML
     private void backLoginBtnHandler(ActionEvent event) {
         Stage secondaryStage = new Stage();
@@ -129,7 +129,7 @@ public class RegisterController {
             secondaryStage.setTitle("Login");
             secondaryStage.show();
             primaryStage.close();
-
+            
         } catch (Exception e) {
             e.printStackTrace();
         }

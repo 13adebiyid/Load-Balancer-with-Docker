@@ -48,6 +48,6 @@ public class TerminalController {
     private void appendOutput(String text) {
         history.append(text);
         outputArea.setText(history.toString());
-        outputArea.setScrollTop(Double.MAX_VALUE); // Scroll to bottom
+        outputArea.setScrollTop(Double.MAX_VALUE); 
     }
 }

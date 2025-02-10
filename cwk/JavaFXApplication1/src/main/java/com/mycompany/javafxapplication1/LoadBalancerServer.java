@@ -69,7 +69,7 @@ public class LoadBalancerServer {
                 sendErrorResponse(out, "No available containers");
                 return;
             }
-
+            
             
             // Send container ID to client
             out.writeObject(container.getId());
@@ -104,9 +104,9 @@ public class LoadBalancerServer {
             // Read the file data
             
             //debug code
-            System.out.println("Handling upload for file: " + operation.getFileId() + 
-                             ", chunk: " + operation.getChunkNumber() +
-                             " to container: " + container.getId());
+            System.out.println("Handling upload for file: " + operation.getFileId() +
+                    ", chunk: " + operation.getChunkNumber() +
+                    " to container: " + container.getId());
             
             int dataLength = operation.getChunkSize();
             if (dataLength <= 0) {
@@ -142,9 +142,9 @@ public class LoadBalancerServer {
         try {
             
             //debug code
-            System.out.println("Handling upload for file: " + operation.getFileId() + 
-                             ", chunk: " + operation.getChunkNumber() +
-                             " to container: " + container.getId());
+            System.out.println("Handling upload for file: " + operation.getFileId() +
+                    ", chunk: " + operation.getChunkNumber() +
+                    " to container: " + container.getId());
             
             // Retrieve the chunk from the container
             byte[] data = container.retrieveFileChunk(
@@ -163,7 +163,7 @@ public class LoadBalancerServer {
             out.flush();
             
             System.out.println("Successfully retrieved chunk " + operation.getChunkNumber()+
-                             " (size: " + data.length + " bytes)");
+                    " (size: " + data.length + " bytes)");
             
         } catch (Exception e) {
             System.err.println("Download failed: " + e.getMessage());

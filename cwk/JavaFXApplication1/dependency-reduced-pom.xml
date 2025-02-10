@@ -19,37 +19,57 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <manifestEntries>
-                    <Main-Class>com.mycompany.javafxapplication1.App</Main-Class>
-                  </manifestEntries>
+                  <mainClass>com.mycompany.javafxapplication1.App</mainClass>
                 </transformer>
               </transformers>
               <finalName>gui-app</finalName>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
         </executions>
       </plugin>
       <plugin>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.3.0</version>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.4.1</version>
         <executions>
           <execution>
-            <id>load-balancer-jar</id>
+            <id>load-balancer</id>
             <phase>package</phase>
             <goals>
-              <goal>jar</goal>
+              <goal>shade</goal>
             </goals>
             <configuration>
-              <classifier>loadbalancer</classifier>
-              <archive>
-                <manifest>
+              <transformers>
+                <transformer>
                   <mainClass>com.mycompany.javafxapplication1.LoadBalancerMain</mainClass>
-                </manifest>
-              </archive>
+                </transformer>
+              </transformers>
+              <finalName>loadbalancer</finalName>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <includes>
                 <include>com/mycompany/javafxapplication1/LoadBalancer.class</include>
                 <include>com/mycompany/javafxapplication1/FileStorageContainer.class</include>
                 <include>com/mycompany/javafxapplication1/LoadBalancerMain.class</include>
+                <include>com/mycompany/javafxapplication1/FileOperation.class</include>
+                <include>com/mycompany/javafxapplication1/LoadBalancerServer.class</include>
               </includes>
             </configuration>
           </execution>
@@ -76,5 +96,6 @@
     <maven.compiler.target>11</maven.compiler.target>
     <maven.compiler.source>11</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <javafx.version>13</javafx.version>
   </properties>
 </project>

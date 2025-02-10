@@ -68,18 +68,18 @@ public class FileChunker {
                 
                 // Create chunk info
                 ChunkInfo chunk = new ChunkInfo(
-                    chunkNumber,
-                    bytesRead,
-                    checksum,
-                    encryption.getKeyAsString(),
-                    encryptedData
+                        chunkNumber,
+                        bytesRead,
+                        checksum,
+                        encryption.getKeyAsString(),
+                        encryptedData
                 );
                 
                 chunks.add(chunk);
                 chunkNumber++;
                 
                 logger.info(String.format("Created chunk %d: size=%d bytes, checksum=%s",
-                    chunkNumber, bytesRead, checksum));
+                        chunkNumber, bytesRead, checksum));
                 
                 System.out.println("Created chunk " + chunkNumber + " (size: " + bytesRead + " bytes)");
             }
@@ -117,8 +117,8 @@ public class FileChunker {
                 String calculatedChecksum = Base64.getEncoder().encodeToString(md.digest());
                 
                 if (!calculatedChecksum.equals(chunk.getChecksum())) {
-                    throw new IOException("Chunk " + chunk.getNumber() + 
-                        " failed checksum verification");
+                    throw new IOException("Chunk " + chunk.getNumber() +
+                            " failed checksum verification");
                 }
                 
                 // Write verified chunk
@@ -126,7 +126,7 @@ public class FileChunker {
                 fos.flush();
                 
                 logger.info(String.format("Reassembled chunk %d: verified checksum=%s",
-                    chunk.getNumber(), calculatedChecksum));
+                        chunk.getNumber(), calculatedChecksum));
             }
         }
     }
@@ -156,8 +156,8 @@ public class FileChunker {
         private final String encryptionKey;
         private final byte[] data;
         
-        public ChunkInfo(int number, int size, String checksum, 
-                        String encryptionKey, byte[] data) {
+        public ChunkInfo(int number, int size, String checksum,
+                String encryptionKey, byte[] data) {
             this.number = number;
             this.size = size;
             this.checksum = checksum;

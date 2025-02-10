@@ -29,7 +29,7 @@ public class SecondaryController {
     
     @FXML
     private TableView dataTableView;
-
+    
     @FXML
     private Button secondaryButton;
     
@@ -40,45 +40,45 @@ public class SecondaryController {
     private TextField customTextField;
     
     @FXML
-    private Button fileOperationsBtn; 
+    private Button fileOperationsBtn;
     
     @FXML
-private void switchToFileOperations() {
-    Stage fileOperationsStage = new Stage();
-    Stage currentStage = (Stage) fileOperationsBtn.getScene().getWindow();
-    try {
-        FXMLLoader loader = new FXMLLoader();
-        loader.setLocation(getClass().getResource("file_operations.fxml"));
-        Parent root = loader.load();
-        
-        // Get the controller and set the current user
-        FileOperationsController controller = loader.getController();
-        controller.setCurrentUser(userTextField.getText());  // Add this line
-        
-        Scene scene = new Scene(root, 640, 480);
-        fileOperationsStage.setScene(scene);
-        fileOperationsStage.setTitle("File Operations");
-        fileOperationsStage.show();
-        currentStage.close();
-    } catch (Exception e) {
-        e.printStackTrace();
+    private void switchToFileOperations() {
+        Stage fileOperationsStage = new Stage();
+        Stage currentStage = (Stage) fileOperationsBtn.getScene().getWindow();
+        try {
+            FXMLLoader loader = new FXMLLoader();
+            loader.setLocation(getClass().getResource("file_operations.fxml"));
+            Parent root = loader.load();
+            
+            // Get controller, set current user
+            FileOperationsController controller = loader.getController();
+            controller.setCurrentUser(userTextField.getText());
+            
+            Scene scene = new Scene(root, 640, 480);
+            fileOperationsStage.setScene(scene);
+            fileOperationsStage.setTitle("File Operations");
+            fileOperationsStage.show();
+            currentStage.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
-}
-
+    
     
     @FXML
     private void RefreshBtnHandler(ActionEvent event){
         Stage primaryStage = (Stage) customTextField.getScene().getWindow();
         customTextField.setText((String)primaryStage.getUserData());
     }
-        
+    
     @FXML
     private void switchToPrimary(){
         Stage secondaryStage = new Stage();
         Stage primaryStage = (Stage) secondaryButton.getScene().getWindow();
         try {
             
-        
+            
             FXMLLoader loader = new FXMLLoader();
             loader.setLocation(getClass().getResource("primary.fxml"));
             Parent root = loader.load();
@@ -87,12 +87,12 @@ private void switchToFileOperations() {
             secondaryStage.setTitle("Login");
             secondaryStage.show();
             primaryStage.close();
-
+            
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
+    
     public void initialise(String[] credentials) {
         userTextField.setText(credentials[0]);
         DB myObj = new DB();
@@ -100,14 +100,14 @@ private void switchToFileOperations() {
         try {
             data = myObj.getDataFromTable();
             TableColumn user = new TableColumn("User");
-        user.setCellValueFactory(
-        new PropertyValueFactory<>("user"));
-
-        TableColumn pass = new TableColumn("Pass");
-        pass.setCellValueFactory(
-            new PropertyValueFactory<>("pass"));
-        dataTableView.setItems(data);
-        dataTableView.getColumns().addAll(user, pass);
+            user.setCellValueFactory(
+                    new PropertyValueFactory<>("user"));
+            
+            TableColumn pass = new TableColumn("Pass");
+            pass.setCellValueFactory(
+                    new PropertyValueFactory<>("pass"));
+            dataTableView.setItems(data);
+            dataTableView.getColumns().addAll(user, pass);
         } catch (ClassNotFoundException ex) {
             Logger.getLogger(SecondaryController.class.getName()).log(Level.SEVERE, null, ex);
         }

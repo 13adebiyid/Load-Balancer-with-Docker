@@ -22,23 +22,23 @@ public class App extends Application {
         myObj.log("-------- Initializing database connection ------------");
         
         try {
-        // Initialize database - only creates tables if they don't exist
-        myObj.initializeDatabase();
+            // Initialize database
+            myObj.initializeDatabase();
+            
+            myObj.log("Database initialization completed successfully");
+            
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to initialize database", ex);
+        }
         
-        myObj.log("Database initialization completed successfully");
-        
-    } catch (ClassNotFoundException ex) {
-        Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
-        throw new RuntimeException("Failed to initialize database", ex);
-    }
-
         try {
             myObj.createTables();
         } catch (ClassNotFoundException ex) {
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
         }
         
-        // Initialize and start the load balancer server
+        // Initialize and start load balancer server
         LoadBalancer loadBalancer = new LoadBalancer();
         
         // Add storage containers
@@ -50,7 +50,7 @@ public class App extends Application {
             loadBalancer.addContainer(container);
         }
         
-        // Start the server
+        // Start server
         LoadBalancerServer server = new LoadBalancerServer(8080, loadBalancer);
         server.start();
         

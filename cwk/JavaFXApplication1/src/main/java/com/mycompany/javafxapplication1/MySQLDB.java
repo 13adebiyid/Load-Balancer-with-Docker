@@ -38,45 +38,45 @@ public class MySQLDB {
             try (Statement stmt = mysqlConnection.createStatement()) {
                 // Users table
                 stmt.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS users (" +
-                    "id INT PRIMARY KEY AUTO_INCREMENT, " +
-                    "name VARCHAR(255) NOT NULL UNIQUE, " +
-                    "password VARCHAR(255) NOT NULL, " +
-                    "is_admin BOOLEAN DEFAULT FALSE, " +
-                    "last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                        "CREATE TABLE IF NOT EXISTS users (" +
+                                "id INT PRIMARY KEY AUTO_INCREMENT, " +
+                                "name VARCHAR(255) NOT NULL UNIQUE, " +
+                                "password VARCHAR(255) NOT NULL, " +
+                                "is_admin BOOLEAN DEFAULT FALSE, " +
+                                "last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
                 );
                 
                 // Files table
                 stmt.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS files (" +
-                    "file_id VARCHAR(255) PRIMARY KEY, " +
-                    "file_name VARCHAR(255) NOT NULL, " +
-                    "owner_user VARCHAR(255) NOT NULL, " +
-                    "total_size BIGINT NOT NULL, " +
-                    "total_chunks INT NOT NULL, " +
-                    "is_shared BOOLEAN DEFAULT FALSE, " +
-                    "last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                        "CREATE TABLE IF NOT EXISTS files (" +
+                                "file_id VARCHAR(255) PRIMARY KEY, " +
+                                "file_name VARCHAR(255) NOT NULL, " +
+                                "owner_user VARCHAR(255) NOT NULL, " +
+                                "total_size BIGINT NOT NULL, " +
+                                "total_chunks INT NOT NULL, " +
+                                "is_shared BOOLEAN DEFAULT FALSE, " +
+                                "last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
                 );
                 
                 // File chunks table
                 stmt.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS file_chunks (" +
-                    "file_id VARCHAR(255), " +
-                    "chunk_number INT, " +
-                    "container_id VARCHAR(255) NOT NULL, " +
-                    "PRIMARY KEY (file_id, chunk_number), " +
-                    "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
+                        "CREATE TABLE IF NOT EXISTS file_chunks (" +
+                                "file_id VARCHAR(255), " +
+                                "chunk_number INT, " +
+                                "container_id VARCHAR(255) NOT NULL, " +
+                                "PRIMARY KEY (file_id, chunk_number), " +
+                                "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
                 );
                 
                 // File permissions table
                 stmt.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS file_permissions (" +
-                    "file_id VARCHAR(255), " +
-                    "user_name VARCHAR(255), " +
-                    "can_read BOOLEAN DEFAULT FALSE, " +
-                    "can_write BOOLEAN DEFAULT FALSE, " +
-                    "PRIMARY KEY (file_id, user_name), " +
-                    "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
+                        "CREATE TABLE IF NOT EXISTS file_permissions (" +
+                                "file_id VARCHAR(255), " +
+                                "user_name VARCHAR(255), " +
+                                "can_read BOOLEAN DEFAULT FALSE, " +
+                                "can_write BOOLEAN DEFAULT FALSE, " +
+                                "PRIMARY KEY (file_id, user_name), " +
+                                "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
                 );
                 
                 logger.info("MySQL tables initialized successfully");
@@ -92,8 +92,8 @@ public class MySQLDB {
      * Starts periodic synchronization between MySQL and SQLite
      */
     private void startSyncScheduler() {
-        syncExecutor.scheduleAtFixedRate(this::synchronizeDatabases, 
-            0, 5, TimeUnit.MINUTES);
+        syncExecutor.scheduleAtFixedRate(this::synchronizeDatabases,
+                0, 5, TimeUnit.MINUTES);
     }
     
     /**
@@ -140,7 +140,7 @@ public class MySQLDB {
         
         // Prepare MySQL statement
         String insertUser = "INSERT INTO users (name, password) VALUES (?, ?) " +
-                          "ON DUPLICATE KEY UPDATE password = ?";
+                "ON DUPLICATE KEY UPDATE password = ?";
         
         try (PreparedStatement pstmt = mysqlConnection.prepareStatement(insertUser)) {
             for (User user : sqliteUsers) {
@@ -161,15 +161,15 @@ public class MySQLDB {
         
         // Prepare MySQL statements
         String insertFile = "INSERT INTO files (file_id, file_name, owner_user, total_size, " +
-                          "total_chunks, is_shared) VALUES (?, ?, ?, ?, ?, ?) " +
-                          "ON DUPLICATE KEY UPDATE file_name = ?, owner_user = ?, " +
-                          "total_size = ?, total_chunks = ?, is_shared = ?";
-                          
+                "total_chunks, is_shared) VALUES (?, ?, ?, ?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE file_name = ?, owner_user = ?, " +
+                "total_size = ?, total_chunks = ?, is_shared = ?";
+        
         String insertChunk = "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
-                           "VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE container_id = ?";
+                "VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE container_id = ?";
         
         try (PreparedStatement fileStmt = mysqlConnection.prepareStatement(insertFile);
-             PreparedStatement chunkStmt = mysqlConnection.prepareStatement(insertChunk)) {
+                PreparedStatement chunkStmt = mysqlConnection.prepareStatement(insertChunk)) {
             
             for (FileMetadata file : sqliteFiles) {
                 // Insert/update file metadata

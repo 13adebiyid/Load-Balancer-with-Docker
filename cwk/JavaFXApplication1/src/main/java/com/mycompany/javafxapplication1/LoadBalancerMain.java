@@ -13,10 +13,7 @@ public class LoadBalancerMain {
         
         // Add initial storage containers
         for (int i = 1; i <= 4; i++) {
-            FileStorageContainer container = new FileStorageContainer(
-                "container-" + i,
-                "/storage/container" + i
-            );
+            FileStorageContainer container = new FileStorageContainer("container-" + i,"/storage/container" + i);
             loadBalancer.addContainer(container);
         }
         

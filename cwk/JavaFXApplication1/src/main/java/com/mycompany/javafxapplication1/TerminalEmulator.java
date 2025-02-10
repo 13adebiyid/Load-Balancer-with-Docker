@@ -5,11 +5,11 @@ import java.util.*;
 
 public class TerminalEmulator {
     private String currentDirectory;
-
+    
     public TerminalEmulator() {
         currentDirectory = System.getProperty("user.home");
     }
-
+    
     public String executeCommand(String command) {
         try {
             ProcessBuilder processBuilder = new ProcessBuilder();

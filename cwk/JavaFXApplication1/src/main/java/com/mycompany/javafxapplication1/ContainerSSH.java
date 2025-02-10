@@ -27,20 +27,20 @@ public class ContainerSSH {
      */
     public void connect(String containerId, String username, String password) throws JSchException {
         // Get container host and port from configuration or environment
-        String host = "localhost"; // Default for local testing
+        String host = "localhost";
         int port = 22;
         
         // Create SSH session
         session = jsch.getSession(username, host, port);
         session.setPassword(password);
         
-        // Skip host key checking (not recommended for production)
+        // Skip host key checking
         Properties config = new Properties();
         config.put("StrictHostKeyChecking", "no");
         session.setConfig(config);
         
         try {
-            // Connect to the container
+            // Connect to container
             session.connect(30000);
             logger.info("SSH session established to container: " + containerId);
             
@@ -81,7 +81,7 @@ public class ContainerSSH {
             commander.println(command);
             commander.flush();
             
-            // Wait for response
+            // Wait for response as reposnse doesnt appear in terminal when immediate
             Thread.sleep(1000);
             
             // Get response
@@ -97,30 +97,7 @@ public class ContainerSSH {
     }
     
     /**
-     * Creates a new file in the container
-     */
-    public void createFile(String filename, String content) throws IOException {
-        String escapedContent = content.replace("\"", "\\\"");
-        String command = String.format("echo \"%s\" > %s", escapedContent, filename);
-        executeCommand(command);
-    }
-    
-    /**
-     * Reads a file from the container
-     */
-    public String readFile(String filename) throws IOException {
-        return executeCommand("cat " + filename);
-    }
-    
-    /**
-     * Lists directory contents in the container
-     */
-    public String listDirectory(String path) throws IOException {
-        return executeCommand("ls -la " + path);
-    }
-    
-    /**
-     * Gets system information from the container
+     * Gets system information from the container and formats info for easier read 
      */
     public String getSystemInfo() throws IOException {
         StringBuilder info = new StringBuilder();
@@ -136,7 +113,7 @@ public class ContainerSSH {
     }
     
     /**
-     * Disconnects from the container
+     * Disconnects from container
      */
     public void disconnect() {
         if (commander != null) {
@@ -158,7 +135,7 @@ public class ContainerSSH {
      * Checks if connected to container
      */
     public boolean isConnected() {
-        return session != null && session.isConnected() && 
-               channel != null && channel.isConnected();
+        return session != null && session.isConnected() &&
+                channel != null && channel.isConnected();
     }
 }

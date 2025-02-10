@@ -9,30 +9,37 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
+        <javafx.version>13</javafx.version>
     </properties>
     
     <dependencies>
-        <!-- Existing JavaFX dependencies -->
+        <!-- JavaFX dependencies -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
-            <version>13</version>
+            <version>${javafx.version}</version>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
-            <version>13</version>
+            <version>${javafx.version}</version>
         </dependency>
+        <!-- Database dependencies -->
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.40.0.0</version>
         </dependency>
         <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.28</version>
+        </dependency>
+        <!-- SSH and Security -->
+        <dependency>
             <groupId>com.jcraft</groupId>
             <artifactId>jsch</artifactId>
             <version>0.1.55</version>
-            <type>jar</type>
         </dependency>
     </dependencies>
     
@@ -53,12 +60,20 @@
                         <configuration>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <manifestEntries>
-                                        <Main-Class>com.mycompany.javafxapplication1.App</Main-Class>
-                                    </manifestEntries>
+                                    <mainClass>com.mycompany.javafxapplication1.App</mainClass>
                                 </transformer>
                             </transformers>
                             <finalName>gui-app</finalName>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                         </configuration>
                     </execution>
                 </executions>
@@ -67,33 +82,45 @@
             <!-- Load Balancer JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.4.1</version>
                 <executions>
                     <execution>
-                        <id>load-balancer-jar</id>
+                        <id>load-balancer</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>jar</goal>
+                            <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <classifier>loadbalancer</classifier>
-                            <archive>
-                                <manifest>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.mycompany.javafxapplication1.LoadBalancerMain</mainClass>
-                                </manifest>
-                            </archive>
+                                </transformer>
+                            </transformers>
+                            <finalName>loadbalancer</finalName>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                             <includes>
                                 <include>com/mycompany/javafxapplication1/LoadBalancer.class</include>
                                 <include>com/mycompany/javafxapplication1/FileStorageContainer.class</include>
                                 <include>com/mycompany/javafxapplication1/LoadBalancerMain.class</include>
+                                <include>com/mycompany/javafxapplication1/FileOperation.class</include>
+                                <include>com/mycompany/javafxapplication1/LoadBalancerServer.class</include>
                             </includes>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- Other existing plugins -->
+            <!-- Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -102,6 +129,8 @@
                     <release>11</release>
                 </configuration>
             </plugin>
+
+            <!-- JavaFX Plugin -->
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
