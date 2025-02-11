@@ -69,9 +69,9 @@ public class FileStorageContainer {
         try {
             // Basic SSH connection with correct credentials
             JSch jsch = new JSch();
-            Session session = jsch.getSession("ntu-user",
+            Session session = jsch.getSession("root",
                     this.containerId.replace("container-", "storage"), 22);
-            session.setPassword("ntu-user");
+            session.setPassword("root");
             
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
@@ -151,8 +151,8 @@ public class FileStorageContainer {
         try {
             // Test SSH connectivity
             JSch jsch = new JSch();
-            session = jsch.getSession("ntu-user", containerHost, containerPort);
-            session.setPassword("ntu-user");
+            session = jsch.getSession("root", containerHost, containerPort);
+            session.setPassword("root");
             
             // Configure SSH connection
             Properties config = new Properties();
