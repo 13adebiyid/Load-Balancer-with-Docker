@@ -1,11 +1,16 @@
 package com.mycompany.javafxapplication1;
 
+import com.jcraft.jsch.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.Random;
+
 
 /**
  * Represents a single storage container in the distributed file system
@@ -16,7 +21,8 @@ public class FileStorageContainer {
     private String containerId;
     private String storagePath;
     private AtomicInteger activeConnections;
-    private Random random;
+    private String containerHost;  // Add this for network communication
+    private int containerPort;
     
     /**
      * Constructor - sets up the storage container
@@ -25,37 +31,28 @@ public class FileStorageContainer {
      */
     public FileStorageContainer(String containerId, String storagePath) {
         this.containerId = containerId;
+        this.storagePath = storagePath;
         
-        String envPath = System.getenv("STORAGE_PATH");
-        this.storagePath = envPath != null ? envPath : storagePath;
-        
-        System.out.println("Setting up storage container " + containerId + " with path: " + this.storagePath);
-        
-        // Create storage directory with full permissions
-        File storage = new File(this.storagePath);
-        if (!storage.exists()) {
-            boolean created = storage.mkdirs();
-            if (!created) {
-                System.err.println("Failed to create storage directory: " + this.storagePath);
-            } else {
-                storage.setWritable(true, false);
-                storage.setReadable(true, false);
-                storage.setExecutable(true, false);
-                System.out.println("Created storage directory with full permissions: " + this.storagePath);
-            }
+        // Map container IDs to their Docker service names
+        switch(containerId) {
+            case "container-1":
+                this.containerHost = "storage1";
+                break;
+            case "container-2":
+                this.containerHost = "storage2";
+                break;
+            case "container-3":
+                this.containerHost = "storage3";
+                break;
+            case "container-4":
+                this.containerHost = "storage4";
+                break;
         }
+        this.containerPort = 22;  // SSH port as defined in docker-compose.yml
         
-        this.activeConnections = new AtomicInteger(0);
-        this.random = new Random();
-        
-       
-        
-        // Ensuring directory is writable for debugging
-        if (!storage.canWrite()) {
-            System.err.println("Warning: Storage directory is not writable: " + this.storagePath);
-        }
-        
-        System.out.println("Initialized storage container: " + containerId + " at path: " + this.storagePath);
+        System.out.println("Initializing container " + containerId +
+                " with host: " + containerHost +
+                " and storage path: " + storagePath);
     }
     
     /**
@@ -69,31 +66,41 @@ public class FileStorageContainer {
     
     public void storeFileChunk(String fileId, int chunkNumber, byte[] data)
             throws IOException, InterruptedException {
-        
-        String chunkPath = storagePath + File.separator + fileId + "_chunk_" + chunkNumber;
-        
-        // Create encryption instance
-        FileEncryption encryption = new FileEncryption();
-        
-        // Encrypt chunk data
-        byte[] encryptedData = encryption.encryptData(data);
-        if (encryptedData == null) {
-            throw new IOException("Failed to encrypt chunk data");
-        }
-        
-        // Store the encryption key in the database
-        String keyString = encryption.getKeyAsString();
-        DB db = new DB();
         try {
-            db.storeEncryptionKey(fileId, chunkNumber, keyString);
-        } catch (ClassNotFoundException e) {
-            throw new IOException("Failed to store encryption key");
-        }
-        
-        // Write the encrypted data to the file
-        try (FileOutputStream fos = new FileOutputStream(chunkPath)) {
-            fos.write(encryptedData);
-            fos.flush();
+            // Create SSH session to storage container
+            JSch jsch = new JSch();
+            Session session = jsch.getSession("ntu-user", containerHost, containerPort);
+            session.setPassword("ntu-user");
+            
+            // Skip host key checking for development
+            Properties config = new Properties();
+            config.put("StrictHostKeyChecking", "no");
+            session.setConfig(config);
+            
+            session.connect();
+            
+            // Create SFTP channel
+            ChannelSftp sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect();
+            
+            // Create chunk file path
+            String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
+            
+            // Store the data
+            try (ByteArrayInputStream dataStream = new ByteArrayInputStream(data)) {
+                sftpChannel.put(dataStream, chunkPath);
+            }
+            
+            sftpChannel.disconnect();
+            session.disconnect();
+            
+            System.out.println("Successfully stored chunk " + chunkNumber +
+                    " in container " + containerId);
+            
+        } catch (JSchException e) {
+            throw new IOException("Failed to connect to storage container: " + e.getMessage());
+        } catch (SftpException e) {
+            throw new IOException("Failed to store file chunk: " + e.getMessage());
         }
     }
     
@@ -105,37 +112,117 @@ public class FileStorageContainer {
      */
     public byte[] retrieveFileChunk(String fileId, int chunkNumber)
             throws IOException, InterruptedException {
-        
-        // Read the encrypted data
-        String chunkPath = storagePath + File.separator + fileId + "_chunk_" + chunkNumber;
-        byte[] encryptedData;
-        try (FileInputStream fis = new FileInputStream(chunkPath)) {
-            encryptedData = fis.readAllBytes();
-        }
-        
-        // Get the encryption key from database
-        DB db = new DB();
-        String keyString;
         try {
-            keyString = db.getEncryptionKey(fileId, chunkNumber);
-        } catch (ClassNotFoundException e) {
-            throw new IOException("Failed to retrieve encryption key");
+            // Create SSH session
+            JSch jsch = new JSch();
+            Session session = jsch.getSession("ntu-user", containerHost, containerPort);
+            session.setPassword("ntu-user");
+            
+            Properties config = new Properties();
+            config.put("StrictHostKeyChecking", "no");
+            session.setConfig(config);
+            
+            session.connect();
+            
+            // Create SFTP channel
+            ChannelSftp sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect();
+            
+            // Retrieve the data
+            String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
+            byte[] data;
+            
+            try (ByteArrayOutputStream dataStream = new ByteArrayOutputStream()) {
+                sftpChannel.get(chunkPath, dataStream);
+                data = dataStream.toByteArray();
+            }
+            
+            sftpChannel.disconnect();
+            session.disconnect();
+            
+            System.out.println("Successfully retrieved chunk " + chunkNumber +
+                    " from container " + containerId);
+            
+            return data;
+            
+        } catch (JSchException e) {
+            throw new IOException("Failed to connect to storage container: " + e.getMessage());
+        } catch (SftpException e) {
+            throw new IOException("Failed to retrieve file chunk: " + e.getMessage());
         }
-        
-        // Create encryption instance and decrypt
-        FileEncryption encryption = FileEncryption.fromKey(keyString);
-        if (encryption == null) {
-            throw new IOException("Failed to create encryption instance");
-        }
-        
-        byte[] decryptedData = encryption.decryptData(encryptedData);
-        if (decryptedData == null) {
-            throw new IOException("Failed to decrypt chunk data");
-        }
-        
-        return decryptedData;
     }
     
+    public boolean checkHealth() {
+        Session session = null;
+        ChannelSftp sftpChannel = null;
+        
+        try {
+            // Test SSH connectivity
+            JSch jsch = new JSch();
+            session = jsch.getSession("ntu-user", containerHost, containerPort);
+            session.setPassword("ntu-user");
+            
+            // Configure SSH connection
+            Properties config = new Properties();
+            config.put("StrictHostKeyChecking", "no");
+            session.setConfig(config);
+            
+            session.connect(5000);  // 5 second timeout
+            
+            // Test SFTP functionality
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect();
+            
+            // Test write capability
+            String healthCheckFileName = ".health_check_" + System.currentTimeMillis();
+            String healthCheckPath = storagePath + "/" + healthCheckFileName;
+            
+            // write small test file
+            byte[] testData = "health check".getBytes();
+            try (ByteArrayInputStream dataStream = new ByteArrayInputStream(testData)) {
+                sftpChannel.put(dataStream, healthCheckPath);
+            }
+            
+            // Test read capability
+            try (ByteArrayOutputStream readStream = new ByteArrayOutputStream()) {
+                sftpChannel.get(healthCheckPath, readStream);
+                
+                // Verify the data 
+                boolean dataMatches = Arrays.equals(testData, readStream.toByteArray());
+                if (!dataMatches) {
+                    System.err.println("Health check failed: Data corruption detected in container " + containerId);
+                    return false;
+                }
+            }
+            
+            try {
+                sftpChannel.rm(healthCheckPath);
+            } catch (SftpException e) {
+                System.err.println("Warning: Could not remove health check file: " + e.getMessage());
+            }
+            
+            System.out.println("Health check passed for container " + containerId);
+            return true;
+            
+        } catch (JSchException e) {
+            System.err.println("Health check failed for container " + containerId + ": SSH connection error: " + e.getMessage());
+            return false;
+        } catch (SftpException e) {
+            System.err.println("Health check failed for container " + containerId + ": SFTP operation error: " + e.getMessage());
+            return false;
+        } catch (Exception e) {
+            System.err.println("Health check failed for container " + containerId + ": Unexpected error: " + e.getMessage());
+            return false;
+        } finally {
+            // clean connections
+            if (sftpChannel != null) {
+                sftpChannel.disconnect();
+            }
+            if (session != null) {
+                session.disconnect();
+            }
+        }
+    }
     
     /**
      * Get the number of active connections to this container

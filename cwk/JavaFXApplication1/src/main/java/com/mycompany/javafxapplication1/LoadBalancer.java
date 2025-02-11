@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * LoadBalancer class that distributes work across multiple file storage containers
@@ -16,6 +19,8 @@ public class LoadBalancer {
     private int currentContainerIndex;
     private String currentAlgorithm;
     private Random random;
+    private final ScheduledExecutorService healthCheckExecutor;
+    private static final int HEALTH_CHECK_INTERVAL = 30;
     
     
     /**
@@ -28,6 +33,45 @@ public class LoadBalancer {
         currentContainerIndex = 0;
         currentAlgorithm = "RoundRobin";
         random = new Random();
+        this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
+        startHealthChecks();
+    }
+    
+    //for health checking
+    private void startHealthChecks() {
+        healthCheckExecutor.scheduleAtFixedRate(() -> {
+            for (FileStorageContainer container : containers) {
+                try {
+                    boolean isHealthy = container.checkHealth();
+                    updateContainerHealth(container.getId(), isHealthy);
+                    
+                    // Log container status changes
+                    Boolean previousStatus = containerStatus.get(container.getId());
+                    if (previousStatus != null && previousStatus != isHealthy) {
+                        System.out.println("Container " + container.getId() + 
+                                         " health status changed from " + 
+                                         previousStatus + " to " + isHealthy);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error during health check for container " + 
+                                     container.getId() + ": " + e.getMessage());
+                    updateContainerHealth(container.getId(), false);
+                }
+            }
+        }, 0, HEALTH_CHECK_INTERVAL, TimeUnit.SECONDS);
+    }
+    
+    // Make sure to clean up when shutting down
+    public void shutdown() {
+        healthCheckExecutor.shutdown();
+        try {
+            if (!healthCheckExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+                healthCheckExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            healthCheckExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
     
     /**
