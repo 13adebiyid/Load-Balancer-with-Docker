@@ -20,7 +20,7 @@ public class LoadBalancer {
     private String currentAlgorithm;
     private Random random;
     private final ScheduledExecutorService healthCheckExecutor;
-    private static final int HEALTH_CHECK_INTERVAL = 30;
+    private static final int HEALTH_CHECK_INTERVAL = 600;
     
     
     /**
@@ -182,7 +182,13 @@ public class LoadBalancer {
     public void updateContainerHealth(String containerId, boolean isHealthy) {
         if (containerStatus.containsKey(containerId)) {
             containerStatus.put(containerId, isHealthy);
-            System.out.println("Container " + containerId + " health: " + isHealthy);
+            if(isHealthy){
+                System.out.println("Container " + containerId + " health: Ok");
+            }
+            else{
+                System.out.println("Container " + containerId + " health: Poor");
+            }
+            
         }
     }
 }
