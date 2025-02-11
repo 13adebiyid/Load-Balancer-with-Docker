@@ -32,27 +32,13 @@ public class FileStorageContainer {
     public FileStorageContainer(String containerId, String storagePath) {
         this.containerId = containerId;
         this.storagePath = storagePath;
+        this.activeConnections = new AtomicInteger(0); // Initialize the AtomicInteger
         
         // Map container IDs to their Docker service names
-        switch(containerId) {
-            case "container-1":
-                this.containerHost = "storage1";
-                break;
-            case "container-2":
-                this.containerHost = "storage2";
-                break;
-            case "container-3":
-                this.containerHost = "storage3";
-                break;
-            case "container-4":
-                this.containerHost = "storage4";
-                break;
-        }
-        this.containerPort = 22;  // SSH port as defined in docker-compose.yml
+        this.containerHost = containerId.replace("container-", "storage");
+        this.containerPort = 22;
         
-        System.out.println("Initializing container " + containerId +
-                " with host: " + containerHost +
-                " and storage path: " + storagePath);
+        System.out.println("Initializing container " + containerId + " with host: " + containerHost + " and storage path: " + storagePath);
     }
     
     /**
@@ -60,38 +46,56 @@ public class FileStorageContainer {
      * @param fileId Unique identifier for the file
      * @param chunkNumber The sequence number of this chunk
      * @param data The actual chunk data to store
-     * @param trafficLevel Affects the artificial delay (1.0 = normal)
      */
     // In FileStorageContainer.java, modify storeFileChunk:
     
     public void storeFileChunk(String fileId, int chunkNumber, byte[] data) throws IOException {
         ChannelSftp sftpChannel = null;
+        Session session = null;
+        
         try {
-            // Basic SSH connection with correct credentials
             JSch jsch = new JSch();
-            Session session = jsch.getSession("root",
-                    this.containerId.replace("container-", "storage"), 22);
+            // Using root credentials as the container is set up with root ownership
+            session = jsch.getSession("root", containerHost, containerPort);
             session.setPassword("root");
             
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
             session.setConfig(config);
-            session.connect();
+            
+            System.out.println("Connecting to " + containerHost + " as root");
+            session.connect(5000);
             
             sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect();
             
-            // Store the file chunk
+            // Ensure storage directory exists
+            try {
+                sftpChannel.mkdir(storagePath);
+                System.out.println("Created storage directory: " + storagePath);
+            } catch (SftpException e) {
+                // Directory might already exist
+                System.out.println("Storage directory exists: " + storagePath);
+            }
+            
+            // Store the chunk
             String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
             try (ByteArrayInputStream dataStream = new ByteArrayInputStream(data)) {
                 sftpChannel.put(dataStream, chunkPath);
+                System.out.println("Successfully stored chunk " + chunkNumber + " in " + chunkPath);
             }
             
         } catch (Exception e) {
-            throw new IOException("Failed to store chunk: " + e.getMessage());
+            String error = "Failed to store chunk in " + containerHost + ": " + e.getMessage();
+            System.err.println(error);
+            e.printStackTrace();
+            throw new IOException(error, e);
         } finally {
             if (sftpChannel != null) {
                 sftpChannel.disconnect();
+            }
+            if (session != null) {
+                session.disconnect();
             }
         }
     }
@@ -104,11 +108,13 @@ public class FileStorageContainer {
      */
     public byte[] retrieveFileChunk(String fileId, int chunkNumber)
             throws IOException, InterruptedException {
+        Session session = null;
+        ChannelSftp sftpChannel = null;
+        
         try {
-            // Create SSH session
             JSch jsch = new JSch();
-            Session session = jsch.getSession("ntu-user", containerHost, containerPort);
-            session.setPassword("ntu-user");
+            session = jsch.getSession("root", containerHost, containerPort);
+            session.setPassword("root");
             
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
@@ -116,11 +122,9 @@ public class FileStorageContainer {
             
             session.connect();
             
-            // Create SFTP channel
-            ChannelSftp sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect();
             
-            // Retrieve the data
             String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
             byte[] data;
             
@@ -129,18 +133,19 @@ public class FileStorageContainer {
                 data = dataStream.toByteArray();
             }
             
-            sftpChannel.disconnect();
-            session.disconnect();
-            
             System.out.println("Successfully retrieved chunk " + chunkNumber +
                     " from container " + containerId);
             
             return data;
             
-        } catch (JSchException e) {
-            throw new IOException("Failed to connect to storage container: " + e.getMessage());
-        } catch (SftpException e) {
-            throw new IOException("Failed to retrieve file chunk: " + e.getMessage());
+        } catch (JSchException | SftpException e) {
+            String error = "Failed to retrieve chunk: " + e.getMessage();
+            System.err.println(error);
+            e.printStackTrace();
+            throw new IOException(error);
+        } finally {
+            if (sftpChannel != null) sftpChannel.disconnect();
+            if (session != null) session.disconnect();
         }
     }
     
@@ -149,70 +154,40 @@ public class FileStorageContainer {
         ChannelSftp sftpChannel = null;
         
         try {
-            // Test SSH connectivity
             JSch jsch = new JSch();
             session = jsch.getSession("root", containerHost, containerPort);
             session.setPassword("root");
             
-            // Configure SSH connection
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
             session.setConfig(config);
             
-            session.connect(5000);  // 5 second timeout
+            session.connect(5000);
             
-            // Test SFTP functionality
             sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect();
             
-            // Test write capability
-            String healthCheckFileName = ".health_check_" + System.currentTimeMillis();
-            String healthCheckPath = storagePath + "/" + healthCheckFileName;
-            
-            // write small test file
+            String testPath = storagePath + "/.health_check";
             byte[] testData = "health check".getBytes();
-            try (ByteArrayInputStream dataStream = new ByteArrayInputStream(testData)) {
-                sftpChannel.put(dataStream, healthCheckPath);
-            }
             
-            // Test read capability
-            try (ByteArrayOutputStream readStream = new ByteArrayOutputStream()) {
-                sftpChannel.get(healthCheckPath, readStream);
-                
-                // Verify the data 
-                boolean dataMatches = Arrays.equals(testData, readStream.toByteArray());
-                if (!dataMatches) {
-                    System.err.println("Health check failed: Data corruption detected in container " + containerId);
-                    return false;
-                }
+            try (ByteArrayInputStream inputStream = new ByteArrayInputStream(testData)) {
+                sftpChannel.put(inputStream, testPath);
             }
             
             try {
-                sftpChannel.rm(healthCheckPath);
+                sftpChannel.rm(testPath);
             } catch (SftpException e) {
                 System.err.println("Warning: Could not remove health check file: " + e.getMessage());
             }
             
-            System.out.println("Health check passed for container " + containerId);
             return true;
             
-        } catch (JSchException e) {
-            System.err.println("Health check failed for container " + containerId + ": SSH connection error: " + e.getMessage());
-            return false;
-        } catch (SftpException e) {
-            System.err.println("Health check failed for container " + containerId + ": SFTP operation error: " + e.getMessage());
-            return false;
         } catch (Exception e) {
-            System.err.println("Health check failed for container " + containerId + ": Unexpected error: " + e.getMessage());
+            System.err.println("Health check failed for " + containerId + ": " + e.getMessage());
             return false;
         } finally {
-            // clean connections
-            if (sftpChannel != null) {
-                sftpChannel.disconnect();
-            }
-            if (session != null) {
-                session.disconnect();
-            }
+            if (sftpChannel != null) sftpChannel.disconnect();
+            if (session != null) session.disconnect();
         }
     }
     

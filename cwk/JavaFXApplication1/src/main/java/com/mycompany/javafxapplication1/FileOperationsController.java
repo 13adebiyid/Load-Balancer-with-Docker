@@ -385,6 +385,7 @@ public class FileOperationsController {
         File selectedFile = fileChooser.showOpenDialog(uploadBtn.getScene().getWindow());
         
         if (selectedFile != null) {
+            System.out.println("Selected file for upload: " + selectedFile.getAbsolutePath());
             fileTextField.setText(selectedFile.getAbsolutePath());
             String fileId = UUID.randomUUID().toString();
             
@@ -394,21 +395,35 @@ public class FileOperationsController {
             Task<Void> uploadTask = new Task<>() {
                 @Override
                 protected Void call() throws Exception {
-                    uploadFileInChunks(selectedFile, fileId);
-                    return null;
+                    try {
+                        System.out.println("Starting upload process for fileId: " + fileId);
+                        uploadFileInChunks(selectedFile, fileId);
+                        return null;
+                    } catch (Exception e) {
+                        System.err.println("Upload failed: " + e.getMessage());
+                        e.printStackTrace();
+                        throw e;
+                    }
                 }
             };
             
             uploadTask.setOnSucceeded(e -> {
+                System.out.println("Upload completed successfully");
                 setControlsEnabled(true);
                 clearProgress();
-                refreshFilesList(); // Refresh list after successful upload
+                refreshFilesList();
+                showAlert(Alert.AlertType.INFORMATION, "Success", "File uploaded successfully");
             });
             
             uploadTask.setOnFailed(e -> {
+                System.err.println("Upload task failed");
+                Throwable exc = uploadTask.getException();
+                if (exc != null) {
+                    System.err.println("Error details: " + exc.getMessage());
+                    exc.printStackTrace();
+                }
                 setControlsEnabled(true);
                 clearProgress();
-                Throwable exc = uploadTask.getException();
                 showAlert(Alert.AlertType.ERROR, "Upload Failed",
                         exc != null ? exc.getMessage() : "Unknown error");
             });
