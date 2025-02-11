@@ -26,8 +26,8 @@ public class LoadBalancerClient {
      * @param port The server port number
      */
     public LoadBalancerClient(String host, int port) {
-        this.host = "load-balancer";
-        this.port = 8080;
+        this.host = host;
+        this.port = port;
         
         //debug code
         System.out.println("Initializing LoadBalancerClient with host: " + host + ", port: " + port);

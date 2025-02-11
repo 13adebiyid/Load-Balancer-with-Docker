@@ -1,6 +1,7 @@
 package com.mycompany.javafxapplication1;
 
 import java.io.*;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -600,28 +601,45 @@ public class FileOperationsController {
         List<FileChunker.ChunkInfo> chunks = new ArrayList<>();
         long bytesProcessed = 0;
         
+        // Create MessageDigest for checksum calculation
+        MessageDigest md;
+        try {
+            md = MessageDigest.getInstance("SHA-256");
+        } catch (Exception e) {
+            throw new IOException("Failed to initialize checksum", e);
+        }
+        
         for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
             if (operationCancelled) break;
             
             System.out.println("DEBUG: Requesting chunk " + chunkNumber + " from load balancer...");
             
-            byte[] chunkData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
+            // Get encrypted chunk data
+            byte[] encryptedData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
+            System.out.println("DEBUG: Received chunk " + chunkNumber + ", size: " + encryptedData.length);
             
-            System.out.println("DEBUG: Received chunk " + chunkNumber + ", size: " + chunkData.length);
+            // Calculate checksum of encrypted data
+            md.reset();
+            md.update(encryptedData);
+            String checksum = Base64.getEncoder().encodeToString(md.digest());
             
+            // Get encryption key
             String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
+            if (encryptionKey == null) {
+                throw new IOException("Missing encryption key for chunk " + chunkNumber);
+            }
             
-            // Create chunk info (checksum will be verified during reassembly)
+            // Create chunk info with proper checksum
             FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
                     chunkNumber,
-                    chunkData.length,
-                    "", // Checksum will be recalculated
+                    encryptedData.length,
+                    checksum,  // Include checksum calculated from encrypted data
                     encryptionKey,
-                    chunkData
+                    encryptedData
             );
             
             chunks.add(chunk);
-            bytesProcessed += chunkData.length;
+            bytesProcessed += encryptedData.length;
             
             final double progress = (double) bytesProcessed / metadata.getTotalSize();
             Platform.runLater(() -> updateProgress(progress));

@@ -36,6 +36,7 @@ public class FileChunker {
         System.out.println("Chunk size: " + chunkSize + " bytes");
         //        debug code
         
+        
         List<ChunkInfo> chunks = new ArrayList<>();
         MessageDigest md;
         try {
@@ -50,7 +51,6 @@ public class FileChunker {
             int bytesRead;
             
             while ((bytesRead = fis.read(buffer)) != -1) {
-                // Create chunk data
                 byte[] chunkData;
                 if (bytesRead < chunkSize) {
                     chunkData = Arrays.copyOf(buffer, bytesRead);
@@ -58,13 +58,16 @@ public class FileChunker {
                     chunkData = buffer.clone();
                 }
                 
-                // Calculate checksum
-                md.reset();
-                md.update(chunkData);
-                String checksum = Base64.getEncoder().encodeToString(md.digest());
-                
-                // Encrypt chunk
+                // Encrypt chunk first
                 byte[] encryptedData = encryption.encryptData(chunkData);
+                if (encryptedData == null) {
+                    throw new IOException("Failed to encrypt chunk " + chunkNumber);
+                }
+                
+                // Calculate checksum on encrypted data
+                md.reset();
+                md.update(encryptedData);
+                String checksum = Base64.getEncoder().encodeToString(md.digest());
                 
                 // Create chunk info
                 ChunkInfo chunk = new ChunkInfo(
@@ -80,13 +83,13 @@ public class FileChunker {
                 
                 logger.info(String.format("Created chunk %d: size=%d bytes, checksum=%s",
                         chunkNumber, bytesRead, checksum));
-                
-                System.out.println("Created chunk " + chunkNumber + " (size: " + bytesRead + " bytes)");
             }
         }
         
         return chunks;
     }
+    
+    
     
     /**
      * Reassembles chunks back into a file, verifying checksums
@@ -95,7 +98,6 @@ public class FileChunker {
      * @throws IOException if reassembly fails
      */
     public void reassembleFile(List<ChunkInfo> chunks, File outputFile) throws IOException {
-        // Sort chunks by number
         chunks.sort(Comparator.comparingInt(ChunkInfo::getNumber));
         
         MessageDigest md;
@@ -107,26 +109,28 @@ public class FileChunker {
         
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             for (ChunkInfo chunk : chunks) {
-                // Decrypt chunk
-                FileEncryption chunkEncryption = FileEncryption.fromKey(chunk.getEncryptionKey());
-                byte[] decryptedData = chunkEncryption.decryptData(chunk.getData());
-                
-                // Verify checksum
+                // Verify checksum of encrypted data first
                 md.reset();
-                md.update(decryptedData);
+                md.update(chunk.getData());
                 String calculatedChecksum = Base64.getEncoder().encodeToString(md.digest());
                 
                 if (!calculatedChecksum.equals(chunk.getChecksum())) {
-                    throw new IOException("Chunk " + chunk.getNumber() +
-                            " failed checksum verification");
+                    throw new IOException("Chunk " + chunk.getNumber() + " failed checksum verification");
                 }
                 
-                // Write verified chunk
+                // Decrypt chunk after verifying integrity
+                FileEncryption chunkEncryption = FileEncryption.fromKey(chunk.getEncryptionKey());
+                byte[] decryptedData = chunkEncryption.decryptData(chunk.getData());
+                
+                if (decryptedData == null) {
+                    throw new IOException("Failed to decrypt chunk " + chunk.getNumber());
+                }
+                
+                // Write decrypted data
                 fos.write(decryptedData);
                 fos.flush();
                 
-                logger.info(String.format("Reassembled chunk %d: verified checksum=%s",
-                        chunk.getNumber(), calculatedChecksum));
+                logger.info(String.format("Reassembled chunk %d", chunk.getNumber()));
             }
         }
     }
