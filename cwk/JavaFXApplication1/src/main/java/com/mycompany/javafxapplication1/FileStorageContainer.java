@@ -108,11 +108,13 @@ public class FileStorageContainer {
      */
     public byte[] retrieveFileChunk(String fileId, int chunkNumber)
             throws IOException, InterruptedException {
+        System.out.println("DEBUG: `retrieveFileChunk()` called for fileId: " + fileId + ", chunk: " + chunkNumber);
         Session session = null;
         ChannelSftp sftpChannel = null;
         
         try {
             JSch jsch = new JSch();
+            System.out.println("DEBUG: Connecting to " + containerHost + " on port " + containerPort);
             session = jsch.getSession("root", containerHost, containerPort);
             session.setPassword("root");
             
@@ -121,16 +123,20 @@ public class FileStorageContainer {
             session.setConfig(config);
             
             session.connect();
+            System.out.println("DEBUG: Connected to " + containerHost);
             
             sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect();
+            System.out.println("DEBUG: SFTP Channel Opened");
             
             String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
+            System.out.println("DEBUG: Trying to retrieve file: " + chunkPath);
             byte[] data;
             
             try (ByteArrayOutputStream dataStream = new ByteArrayOutputStream()) {
                 sftpChannel.get(chunkPath, dataStream);
                 data = dataStream.toByteArray();
+                System.out.println("DEBUG: File retrieved successfully. Size: " + data.length + " bytes");
             }
             
             System.out.println("Successfully retrieved chunk " + chunkNumber +

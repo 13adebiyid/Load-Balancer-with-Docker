@@ -606,6 +606,8 @@ for (int i = 0; i < chunks.size(); i++) {
     private void downloadAndAssembleFile(String fileId, File outputFile)
             throws IOException, ClassNotFoundException {
         
+        System.out.println("DEBUG: Starting download for file ID: " + fileId);
+        
         FileMetadata metadata = database.getFileMetadata(fileId);
         if (metadata == null) {
             throw new IOException("File metadata not found");
@@ -617,7 +619,12 @@ for (int i = 0; i < chunks.size(); i++) {
         for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
             if (operationCancelled) break;
             
+            System.out.println("DEBUG: Requesting chunk " + chunkNumber + " from load balancer...");
+            
             byte[] chunkData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
+            
+            System.out.println("DEBUG: Received chunk " + chunkNumber + ", size: " + chunkData.length);
+            
             String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
             
             // Create chunk info (checksum will be verified during reassembly)

@@ -102,6 +102,8 @@ public class LoadBalancerClient {
     public byte[] downloadFileChunk(String fileId, int chunkNumber)
             throws IOException, ClassNotFoundException {
         
+        System.out.println("DEBUG: Sending download request to load balancer for file ID: " + fileId + ", chunk: " + chunkNumber);
+        
         if (!testConnection()) {
             throw new IOException("Cannot connect to load balancer server at " +
                     host + ":" + port);
@@ -125,6 +127,8 @@ public class LoadBalancerClient {
                     throw new IOException("Server did not assign a container");
                 }
                 
+                System.out.println("DEBUG: Load balancer assigned container: " + containerId);
+                
                 // Read the chunk data
                 int dataLength = in.readInt();
                 if (dataLength <= 0) {
@@ -135,7 +139,7 @@ public class LoadBalancerClient {
                 in.readFully(data);
                 
                 
-                System.out.println("Successfully downloaded chunk " + chunkNumber +
+                System.out.println("DEBUG Successfully downloaded chunk " + chunkNumber +
                         " from container " + containerId);
                 return data;
             }
