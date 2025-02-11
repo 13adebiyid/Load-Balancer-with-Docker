@@ -26,41 +26,28 @@ public class ContainerSSH {
      * Connects to a container via SSH
      */
     public void connect(String containerId, String username, String password) throws JSchException {
-        // Get container host and port from configuration or environment
-        String host = "localhost";
-        int port = 22;
-        
-        // Create SSH session
-        session = jsch.getSession(username, host, port);
-        session.setPassword(password);
-        
-        // Skip host key checking
-        Properties config = new Properties();
-        config.put("StrictHostKeyChecking", "no");
-        session.setConfig(config);
-        
         try {
-            // Connect to container
-            session.connect(30000);
-            logger.info("SSH session established to container: " + containerId);
+            jsch = new JSch();
             
-            // Open shell channel
-            channel = (ChannelShell)session.openChannel("shell");
-            channel.setPtyType("dumb");
+            // Map container ID to its Docker network alias
+            String host = containerId.replace("container-", "storage");
+            logger.info("Connecting to " + host + " as " + username);
             
-            try {
-                // Set up streams
-                commander = new PrintStream(channel.getOutputStream());
-            } catch (IOException ex) {
-                Logger.getLogger(ContainerSSH.class.getName()).log(Level.SEVERE, null, ex);
-            }
-            channel.setOutputStream(responseStream);
+            // Create new SSH session
+            session = jsch.getSession(username, host, 22);
+            session.setPassword(password);
             
-            // Connect channel
-            channel.connect(3000);
+            // Don't check host key for development environment
+            Properties config = new Properties();
+            config.put("StrictHostKeyChecking", "no");
+            session.setConfig(config);
+            
+            // Connect with timeout
+            session.connect(5000);
+            logger.info("Successfully connected to " + host);
             
         } catch (JSchException e) {
-            disconnect();
+            logger.severe("Failed to connect to " + containerId + ": " + e.getMessage());
             throw e;
         }
     }
@@ -69,30 +56,31 @@ public class ContainerSSH {
      * Executes a command in the container
      */
     public String executeCommand(String command) throws IOException {
-        if (channel == null || !channel.isConnected()) {
-            throw new IOException("Not connected to container");
-        }
-        
+        ChannelExec channel = null;
         try {
-            // Clear previous response
-            responseStream.reset();
+            channel = (ChannelExec)session.openChannel("exec");
             
-            // Send command
-            commander.println(command);
-            commander.flush();
+            // Create streams for output
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            channel.setOutputStream(outputStream);
             
-            // Wait for response as reposnse doesnt appear in terminal when immediate
-            Thread.sleep(1000);
+            // Execute command
+            channel.setCommand(command);
+            channel.connect();
             
-            // Get response
-            String response = responseStream.toString();
-            logger.info("Command executed: " + command + "\nResponse: " + response);
+            // Wait for command to complete
+            while (!channel.isClosed()) {
+                Thread.sleep(100);
+            }
             
-            return response;
+            return outputStream.toString();
             
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error executing command: " + command, e);
             throw new IOException("Command execution failed: " + e.getMessage());
+        } finally {
+            if (channel != null) {
+                channel.disconnect();
+            }
         }
     }
     

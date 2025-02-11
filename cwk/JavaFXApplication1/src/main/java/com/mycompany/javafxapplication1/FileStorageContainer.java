@@ -64,43 +64,35 @@ public class FileStorageContainer {
      */
     // In FileStorageContainer.java, modify storeFileChunk:
     
-    public void storeFileChunk(String fileId, int chunkNumber, byte[] data)
-            throws IOException, InterruptedException {
+    public void storeFileChunk(String fileId, int chunkNumber, byte[] data) throws IOException {
+        ChannelSftp sftpChannel = null;
         try {
-            // Create SSH session to storage container
+            // Basic SSH connection with correct credentials
             JSch jsch = new JSch();
-            Session session = jsch.getSession("ntu-user", containerHost, containerPort);
+            Session session = jsch.getSession("ntu-user",
+                    this.containerId.replace("container-", "storage"), 22);
             session.setPassword("ntu-user");
             
-            // Skip host key checking for development
             Properties config = new Properties();
             config.put("StrictHostKeyChecking", "no");
             session.setConfig(config);
-            
             session.connect();
             
-            // Create SFTP channel
-            ChannelSftp sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect();
             
-            // Create chunk file path
+            // Store the file chunk
             String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
-            
-            // Store the data
             try (ByteArrayInputStream dataStream = new ByteArrayInputStream(data)) {
                 sftpChannel.put(dataStream, chunkPath);
             }
             
-            sftpChannel.disconnect();
-            session.disconnect();
-            
-            System.out.println("Successfully stored chunk " + chunkNumber +
-                    " in container " + containerId);
-            
-        } catch (JSchException e) {
-            throw new IOException("Failed to connect to storage container: " + e.getMessage());
-        } catch (SftpException e) {
-            throw new IOException("Failed to store file chunk: " + e.getMessage());
+        } catch (Exception e) {
+            throw new IOException("Failed to store chunk: " + e.getMessage());
+        } finally {
+            if (sftpChannel != null) {
+                sftpChannel.disconnect();
+            }
         }
     }
     
