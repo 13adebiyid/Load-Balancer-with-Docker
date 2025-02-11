@@ -13,7 +13,7 @@ public class LoadBalancerServer {
     private ServerSocket serverSocket;
     private ExecutorService executorService;
     private static final int MAX_THREADS = 10;
-    private static final int SOCKET_TIMEOUT = 120000; // 2 minutes to account for artificial delays
+    private static final int SOCKET_TIMEOUT = 120000;
     
     public LoadBalancerServer(int port, LoadBalancer loadBalancer) {
         this.port = port;
@@ -46,7 +46,6 @@ public class LoadBalancerServer {
     }
     
     private void handleClient(Socket clientSocket) {
-        // Set socket timeout to prevent hanging connections
         try {
             clientSocket.setSoTimeout(SOCKET_TIMEOUT);
         } catch (SocketException e) {
@@ -57,22 +56,25 @@ public class LoadBalancerServer {
                 ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
                 ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
             
-            // Read the operation request
             FileOperation operation = (FileOperation) in.readObject();
-            System.out.println("Received operation: " + operation.getType() + " for file: " + operation.getFileId());
+            System.out.println("Received operation: " + operation.getType() + 
+                    " for file: " + operation.getFileId());
             
-            // Get next container from load balancer
-            FileStorageContainer container = loadBalancer.getNextContainer();
+            // Get appropriate container based on operation type
+            FileStorageContainer container = loadBalancer.getContainerForFileChunk(
+                    operation.getFileId(),
+                    operation.getChunkNumber(),
+                    operation.getType()
+            );
+            
             if (container == null) {
                 sendErrorResponse(out, "No available containers");
                 return;
             }
             
-            // Send container ID to client
             out.writeObject(container.getId());
             out.flush();
             
-            // Handle specific operations
             switch (operation.getType().toUpperCase()) {
                 case "UPLOAD":
                     handleUpload(operation, container, in, out);
@@ -83,10 +85,9 @@ public class LoadBalancerServer {
                 default:
                     sendErrorResponse(out, "Unknown operation type: " + operation.getType());
             }
-            //debug code
+            
             System.out.println("Connection from: " + clientSocket.getInetAddress());
             System.out.println("Using container: " + container.getId());
-
             
         } catch (EOFException e) {
             System.out.println("Client disconnected normally: " + clientSocket.getInetAddress());
@@ -96,17 +97,15 @@ public class LoadBalancerServer {
             System.err.println("Error handling client: " + e.getMessage());
             e.printStackTrace();
         }
-        
     }
     
     private void handleUpload(FileOperation operation, FileStorageContainer container,
             ObjectInputStream in, ObjectOutputStream out)
             throws IOException {
         try {
-            // Read the file data
-            
-            //debug code
-            System.out.println("Handling upload for file: " + operation.getFileId() + ", chunk: " + operation.getChunkNumber() + " to container: " + container.getId());
+            System.out.println("Handling upload for file: " + operation.getFileId() + 
+                    ", chunk: " + operation.getChunkNumber() + 
+                    " to container: " + container.getId());
             
             int dataLength = operation.getChunkSize();
             if (dataLength <= 0) {
@@ -117,19 +116,16 @@ public class LoadBalancerServer {
             byte[] data = new byte[dataLength];
             in.readFully(data);
             
-            // Store the chunk in the container
             container.storeFileChunk(
                     operation.getFileId(),
                     operation.getChunkNumber(),
                     data
             );
             
-            // Send success confirmation
             out.writeBoolean(true);
             out.flush();
             
             System.out.println("Successfully stored chunk " + operation.getChunkNumber());
-         
             
         } catch (Exception e) {
             System.err.println("Upload failed: " + e.getMessage());
@@ -138,16 +134,14 @@ public class LoadBalancerServer {
         }
     }
     
-    private void handleDownload(FileOperation operation, FileStorageContainer container, ObjectInputStream in, ObjectOutputStream out)
+    private void handleDownload(FileOperation operation, FileStorageContainer container,
+            ObjectInputStream in, ObjectOutputStream out)
             throws IOException {
         try {
-            
-            //debug code
-            System.out.println("Handling upload for file: " + operation.getFileId() +
+            System.out.println("Handling download for file: " + operation.getFileId() +
                     ", chunk: " + operation.getChunkNumber() +
-                    " to container: " + container.getId());
+                    " from container: " + container.getId());
             
-            // Retrieve the chunk from the container
             byte[] data = container.retrieveFileChunk(
                     operation.getFileId(),
                     operation.getChunkNumber()
@@ -158,12 +152,11 @@ public class LoadBalancerServer {
                 return;
             }
             
-            // Send the data length and chunk data
             out.writeInt(data.length);
             out.write(data);
             out.flush();
             
-            System.out.println("Successfully retrieved chunk " + operation.getChunkNumber()+
+            System.out.println("Successfully retrieved chunk " + operation.getChunkNumber() +
                     " (size: " + data.length + " bytes)");
             
         } catch (Exception e) {
@@ -175,7 +168,7 @@ public class LoadBalancerServer {
     
     private void sendErrorResponse(ObjectOutputStream out, String message) {
         try {
-            out.writeInt(-1);  // Error indicator
+            out.writeInt(-1);
             out.writeObject(message);
             out.flush();
         } catch (IOException e) {
@@ -186,7 +179,6 @@ public class LoadBalancerServer {
     public void stop() {
         running = false;
         
-        // Close the server socket
         if (serverSocket != null && !serverSocket.isClosed()) {
             try {
                 serverSocket.close();
@@ -195,7 +187,6 @@ public class LoadBalancerServer {
             }
         }
         
-        // Shutdown the executor service
         executorService.shutdown();
         try {
             if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {

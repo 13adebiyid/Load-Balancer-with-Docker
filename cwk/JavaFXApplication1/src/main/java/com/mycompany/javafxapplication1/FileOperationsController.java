@@ -502,84 +502,68 @@ public class FileOperationsController {
      * Uploads a file in chunks using the load balancer
      */
     private void uploadFileInChunks(File file, String fileId) throws IOException {
-//        debug code
-System.out.println("\nDebug: Starting upload process");
-System.out.println("File: " + file.getName());
-System.out.println("File ID: " + fileId);
-//        debug code
-
-FileChunker chunker = new FileChunker();
-int chunkSize = chunker.getOptimalChunkSize(file.length());
-System.out.println("Optimal chunk size: " + chunkSize + " bytes");//        debug code
-
-List<FileChunker.ChunkInfo> chunks = chunker.splitFile(file, chunkSize);
-System.out.println("Total chunks created: " + chunks.size());//        debug code
-
-long totalSize = file.length();
-long bytesProcessed = 0;
-
-for (FileChunker.ChunkInfo chunk : chunks) {
-    System.out.println("\nProcessing chunk " + chunk.getNumber());//        debug code
-    if (operationCancelled) {
-        System.out.println("Upload cancelled by user");
-        break;
-    }
-    
-    String containerId = null;
-    try {
-        containerId = loadBalancerClient.uploadFileChunk(
-                fileId,
-                chunk.getNumber(),
-                chunk.getData()
-        );
-    } catch (ClassNotFoundException ex) {
-        Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
-    }
-    
-    if (containerId != null) {
-        System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);//        debug code
-        recordChunkLocation(fileId, chunk.getNumber(), containerId);
-        try {
-            // Store encryption key
-            database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
-            System.out.println("Encryption key stored for chunk " + chunk.getNumber());//        debug code
-        } catch (ClassNotFoundException ex) {
-            Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+        System.out.println("\nDebug: Starting upload process");
+        System.out.println("File: " + file.getName());
+        System.out.println("File ID: " + fileId);
+        
+        FileChunker chunker = new FileChunker();
+        int chunkSize = chunker.getOptimalChunkSize(file.length());
+        System.out.println("Optimal chunk size: " + chunkSize + " bytes");
+        
+        List<FileChunker.ChunkInfo> chunks = chunker.splitFile(file, chunkSize);
+        System.out.println("Total chunks created: " + chunks.size());
+        
+        // Create metadata at start of upload
+        FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, file.length());
+        metadata.setTotalChunks(chunks.size());
+        
+        long totalSize = file.length();
+        long bytesProcessed = 0;
+        
+        for (FileChunker.ChunkInfo chunk : chunks) {
+            System.out.println("\nProcessing chunk " + chunk.getNumber());
+            if (operationCancelled) {
+                System.out.println("Upload cancelled by user");
+                break;
+            }
+            
+            String containerId = null;
+            try {
+                containerId = loadBalancerClient.uploadFileChunk(
+                        fileId,
+                        chunk.getNumber(),
+                        chunk.getData()
+                );
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            
+            if (containerId != null) {
+                System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);
+                // Update metadata with chunk location
+                metadata.addChunkLocation(chunk.getNumber(), containerId);
+                try {
+                    database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
+                    System.out.println("Encryption key stored for chunk " + chunk.getNumber());
+                } catch (ClassNotFoundException ex) {
+                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                
+                bytesProcessed += chunk.getSize();
+                final double progress = (double) bytesProcessed / totalSize;
+                Platform.runLater(() -> updateProgress(progress));
+            }
         }
         
-        bytesProcessed += chunk.getSize();
-        final double progress = (double) bytesProcessed / totalSize;
-        Platform.runLater(() -> updateProgress(progress));
-    }
-}
-
-// Save metadata
-if (!operationCancelled) {
-    FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, totalSize);
-    metadata.setTotalChunks(chunks.size());
-    
-    for (int i = 0; i < chunks.size(); i++) {
-        String containerId = fileContainerMap.get(fileId).get(i);
-        if (containerId != null) {
-            metadata.addChunkLocation(i, containerId);
+        // Save complete metadata to database
+        if (!operationCancelled) {
+            try {
+                database.saveFileMetadata(metadata);
+                System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
-    }
-    
-    try {
-        database.saveFileMetadata(metadata);
-    } catch (ClassNotFoundException ex) {
-        Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
-    }
-}
-
-//        debug code
-System.out.println("\nDebug: Upload process completed");
-System.out.println("Chunks distribution:");
-for (int i = 0; i < chunks.size(); i++) {
-    String containerId = fileContainerMap.get(fileId).get(i);
-    System.out.println("Chunk " + i + " -> Container: " + containerId);
-}
-//        debug code
     }
     
     // Helper method to show alerts on the JavaFX Application Thread
@@ -714,16 +698,6 @@ for (int i = 0; i < chunks.size(); i++) {
         fileTextField.setText("No file selected");
     }
     
-    /**
-     * Records the location of a file chunk
-     */
-    private void recordChunkLocation(String fileId, int chunkNumber, String containerId) {
-        List<String> containerList = fileContainerMap.computeIfAbsent(fileId, k -> new ArrayList<>());
-        while (containerList.size() <= chunkNumber) {
-            containerList.add(null);
-        }
-        containerList.set(chunkNumber, containerId);
-    }
     
     /**
      * Confirms file deletion with user

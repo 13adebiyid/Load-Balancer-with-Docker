@@ -20,8 +20,8 @@ public class LoadBalancer {
     private String currentAlgorithm;
     private Random random;
     private final ScheduledExecutorService healthCheckExecutor;
-    private static final int HEALTH_CHECK_INTERVAL = 600;
-    
+    private static final int HEALTH_CHECK_INTERVAL = 300;
+    private DB database;
     
     /**
      * Constructor - initializes the load balancer
@@ -34,6 +34,7 @@ public class LoadBalancer {
         currentAlgorithm = "RoundRobin";
         random = new Random();
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
+        this.database = new DB();
         startHealthChecks();
     }
     
@@ -83,6 +84,42 @@ public class LoadBalancer {
         containerStatus.put(container.getId(), true);
         containerPriorities.put(container.getId(), 1);
         System.out.println("Added container: " + container.getId());
+    }
+    
+    public FileStorageContainer getContainerForFileChunk(String fileId, int chunkNumber, String operationType) {
+        if (containers.isEmpty()) {
+            return null;
+        }
+        
+        if ("UPLOAD".equalsIgnoreCase(operationType)) {
+            // For uploads, use load balancing to select container
+            System.out.println("Upload operation - selecting container using load balancing");
+            return getNextContainer();
+        } 
+        else if ("DOWNLOAD".equalsIgnoreCase(operationType)) {
+            try {
+                // Get file metadata from database
+                FileMetadata metadata = database.getFileMetadata(fileId);
+                if (metadata != null) {
+                    // Get the container ID where this chunk was stored
+                    String containerId = metadata.getContainerForChunk(chunkNumber);
+                    if (containerId != null) {
+                        System.out.println("Download operation - retrieving from original container: " + containerId);
+                        // Find and return the matching container
+                        return containers.stream()
+                                .filter(c -> c.getId().equals(containerId))
+                                .findFirst()
+                                .orElse(null);
+                    }
+                }
+            } catch (ClassNotFoundException e) {
+                System.err.println("Error retrieving file metadata: " + e.getMessage());
+            }
+        }
+        
+        // Fallback for unknown operation type or if container lookup fails
+        System.err.println("Warning: Using fallback container selection");
+        return getNextContainer();
     }
     
     /**
