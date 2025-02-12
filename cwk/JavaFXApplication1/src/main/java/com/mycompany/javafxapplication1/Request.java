@@ -16,6 +16,7 @@ public class Request {
     private int priority;
     private final String userId;
     
+    
     public Request(String fileId, int chunkNumber, String operationType, String userId) {
         this.fileId = fileId;
         this.chunkNumber = chunkNumber;
@@ -29,7 +30,9 @@ public class Request {
     public void age() {
         long waitTime = System.currentTimeMillis() - creationTime;
         // Increase priority by 1 for every 30 seconds of waiting
-        this.priority = (int)(waitTime / 30000);
+        this.priority = (int)(waitTime / 5000);
+        System.out.println("Request " + fileId + " aged: new priority = " + priority + 
+                          " (waited " + waitTime + "ms)");
     }
     
     // Getters
@@ -38,6 +41,7 @@ public class Request {
     public String getOperationType() { return operationType; }
     public int getPriority() { return priority; }
     public String getUserId() { return userId; }
+    public long getCreationTime() { return creationTime; }
     public long getWaitTime() { 
         return System.currentTimeMillis() - creationTime; 
     }

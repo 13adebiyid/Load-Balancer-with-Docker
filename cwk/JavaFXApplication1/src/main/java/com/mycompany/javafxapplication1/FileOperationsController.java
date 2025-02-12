@@ -38,7 +38,7 @@ public class FileOperationsController {
     @FXML private TableColumn<FileMetadata, String> fileNameColumn;
     @FXML private TableColumn<FileMetadata, String> ownerColumn;
     @FXML private TableColumn<FileMetadata, String> sizeColumn;
-    @FXML private Button testScalingBtn;
+    @FXML private Button testScalingBtn;//remove
     // Constants
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     
@@ -67,7 +67,9 @@ public class FileOperationsController {
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
     }
 
-    //REMOVE
+    //REMOVEEEEEEEEEEE
+
+    
     @FXML
     private void testScalingHandler(ActionEvent event) {
         setControlsEnabled(false);
@@ -120,6 +122,7 @@ public class FileOperationsController {
         
         new Thread(testTask).start();
     }
+    //-----------------------------------------------------------------------------------------
     
     /**
      * Sets up initial UI state

@@ -31,15 +31,19 @@
                        GridPane.columnIndex="1" GridPane.rowIndex="0" />
             
             <!-- File Operation Buttons -->
-            <Button fx:id="uploadBtn" text="Upload File" onAction="#uploadBtnHandler"
+            <Button fx:id="uploadBtn" text="Upload File" onAction="#uploadBtnHandler" 
                     GridPane.columnIndex="0" GridPane.rowIndex="1" />
-            <Button fx:id="downloadBtn" text="Download File" onAction="#downloadBtnHandler"
-                            GridPane.columnIndex="1" GridPane.rowIndex="1" />
-            <Button fx:id="terminalBtn" text="Terminal" onAction="#openTerminal"
-                            GridPane.columnIndex="2" GridPane.rowIndex="1" />
+            <Button fx:id="downloadBtn" text="Download File" onAction="#downloadBtnHandler" 
+                    GridPane.columnIndex="1" GridPane.rowIndex="1" />
+            <Button fx:id="terminalBtn" text="Terminal" onAction="#openTerminal" 
+                    GridPane.columnIndex="2" GridPane.rowIndex="1" />
             <Button fx:id="remoteTerminalBtn" text="Remote Terminal" onAction="#openRemoteTerminal" 
-                            GridPane.columnIndex="3" GridPane.rowIndex="1"/>
-            <Button fx:id="testScalingBtn" text="Test Scaling" onAction="#testScalingHandler" GridPane.columnIndex="4" GridPane.rowIndex="1"/>
+                    GridPane.columnIndex="3" GridPane.rowIndex="1" />
+            <Button fx:id="testScalingBtn" text="Test Scaling" onAction="#testScalingHandler" 
+                    GridPane.columnIndex="4" GridPane.rowIndex="1" />
+            <Button fx:id="testStarvationBtn" text="Test Starvation Prevention" 
+                    onAction="#testStarvationPreventionHandler" 
+                    GridPane.columnIndex="3" GridPane.rowIndex="2" />
             
             <!-- Progress Indicator -->
             <ProgressBar fx:id="progressBar" progress="0.0" 

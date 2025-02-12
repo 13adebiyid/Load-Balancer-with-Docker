@@ -37,9 +37,11 @@ public class RequestQueue {
     private void startAgingProcess() {
         agingService.scheduleAtFixedRate(() -> {
             synchronized(queue) {
+                System.out.println("\n=== Aging requests ===");
                 queue.forEach(Request::age);
+                System.out.println("=== Aging complete ===\n");
             }
-        }, 0, 5, TimeUnit.SECONDS);
+        }, 0, 2, TimeUnit.SECONDS);  // Check every 2 seconds
     }
     
     public void addRequest(Request request) {
@@ -83,4 +85,6 @@ public class RequestQueue {
             Thread.currentThread().interrupt();
         }
     }
+    
+ 
 }

@@ -83,7 +83,7 @@ public class LoadBalancer {
         processor.start();
     }
     
-    private void processRequest(Request request) {
+    void processRequest(Request request) {
         try {
             FileStorageContainer container = getContainerForFileChunk(
                     request.getFileId(),
@@ -324,6 +324,7 @@ public class LoadBalancer {
             healthCheckExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+        requestQueue.shutdown();
     }
     
     /**
@@ -338,9 +339,7 @@ public class LoadBalancer {
     }
     
     public FileStorageContainer getContainerForFileChunk(String fileId, int chunkNumber, String operationType) {
-    
-        Request request = new Request(fileId, chunkNumber, operationType, "user-" + System.currentTimeMillis());
-        requestQueue.addRequest(request);
+        
         
         if (containers.isEmpty()) {
             return null;
@@ -376,11 +375,7 @@ public class LoadBalancer {
         System.err.println("Warning: Using fallback container selection");
         return getNextContainer();
     }
-    @Override
-    public void shutdown() {
-        super.shutdown();
-        requestQueue.shutdown();
-    }
+   
     
     /**
      * Get the next container based on system conditions
@@ -488,5 +483,9 @@ public class LoadBalancer {
             
         }
     }
+    
+       public RequestQueue getRequestQueue() {
+    return requestQueue;
+}
     
 }
