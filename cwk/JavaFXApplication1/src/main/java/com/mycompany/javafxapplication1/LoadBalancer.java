@@ -27,6 +27,7 @@ public class LoadBalancer {
     private static final double SCALE_DOWN_THRESHOLD = 0.3; // 30% load triggers scale down
     
     private Map<String, ContainerMetrics> containerMetrics;
+    private final RequestQueue requestQueue;
     
     public class ContainerMetrics {
         private int activeConnections;
@@ -53,12 +54,50 @@ public class LoadBalancer {
         containers = new ArrayList<>();
         containerStatus = new HashMap<>();
         containerPriorities = new HashMap<>();
+        containerMetrics = new HashMap<>();//REMOVE
         currentContainerIndex = 0;
         currentAlgorithm = "RoundRobin";
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
         this.database = new DB();
+        this.requestQueue = new RequestQueue();
         startHealthChecks();
         startScalingMonitor();
+        startRequestProcessor();
+    }
+    
+    private void startRequestProcessor() {
+        Thread processor = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Request request = requestQueue.getNextRequest();
+                    if (request != null) {
+                        processRequest(request);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
+        processor.setDaemon(true);
+        processor.start();
+    }
+    
+    private void processRequest(Request request) {
+        try {
+            FileStorageContainer container = getContainerForFileChunk(
+                    request.getFileId(),
+                    request.getChunkNumber(),
+                    request.getOperationType()
+            );
+            
+            if (container != null) {
+                System.out.println("Assigned container " + container.getId() +
+                        " to request from user " + request.getUserId());
+            }
+        } catch (Exception e) {
+            System.err.println("Error processing request: " + e.getMessage());
+        }
     }
     
     private void startScalingMonitor() {
@@ -77,6 +116,47 @@ public class LoadBalancer {
             scaleDown();
         }
     }
+    //REMOVE
+    public void simulateLoad(int numberOfConnections) {
+        if (containers.isEmpty()) {
+            System.out.println("No containers available to simulate load");
+            return;
+        }
+        
+        int connectionsPerContainer = numberOfConnections / containers.size();
+        
+        System.out.println("\n=== Starting Load Simulation ===");
+        System.out.println("Total simulated connections: " + numberOfConnections);
+        System.out.println("Connections per container: " + connectionsPerContainer);
+        System.out.println("Current number of containers: " + containers.size());
+        
+        // Update active connections for each container
+        for (FileStorageContainer container : containers) {
+            // Initialize metrics if not exists
+            containerMetrics.putIfAbsent(container.getId(), new ContainerMetrics());
+            
+            // Reset existing connections
+            while (container.getActiveConnections() > 0) {
+                container.decrementActiveConnections();
+            }
+            
+            // Simulate new container load
+            for (int i = 0; i < connectionsPerContainer; i++) {
+                container.incrementActiveConnections();
+            }
+            
+            // Update metrics
+            ContainerMetrics metrics = containerMetrics.get(container.getId());
+            metrics.updateMetrics(container.getActiveConnections(), connectionsPerContainer * 1024); // Simulate 1KB per connection
+            
+            System.out.println("Container " + container.getId() +
+                    " active connections: " + container.getActiveConnections());
+        }
+        
+        // Force a scaling check
+        checkScaling();
+    }
+    //-----------------------------------------------------------------------------
     
     // Calculate average load across containers
     private double calculateAverageLoad() {
@@ -207,6 +287,8 @@ public class LoadBalancer {
         }
     }
     
+    
+    
     //for health checking
     private void startHealthChecks() {
         healthCheckExecutor.scheduleAtFixedRate(() -> {
@@ -256,6 +338,10 @@ public class LoadBalancer {
     }
     
     public FileStorageContainer getContainerForFileChunk(String fileId, int chunkNumber, String operationType) {
+    
+        Request request = new Request(fileId, chunkNumber, operationType, "user-" + System.currentTimeMillis());
+        requestQueue.addRequest(request);
+        
         if (containers.isEmpty()) {
             return null;
         }
@@ -289,6 +375,11 @@ public class LoadBalancer {
         // Fallback for unknown operation type or if container lookup fails
         System.err.println("Warning: Using fallback container selection");
         return getNextContainer();
+    }
+    @Override
+    public void shutdown() {
+        super.shutdown();
+        requestQueue.shutdown();
     }
     
     /**
@@ -397,4 +488,5 @@ public class LoadBalancer {
             
         }
     }
+    
 }

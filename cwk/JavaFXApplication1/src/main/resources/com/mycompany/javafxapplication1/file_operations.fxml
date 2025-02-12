@@ -39,6 +39,7 @@
                             GridPane.columnIndex="2" GridPane.rowIndex="1" />
             <Button fx:id="remoteTerminalBtn" text="Remote Terminal" onAction="#openRemoteTerminal" 
                             GridPane.columnIndex="3" GridPane.rowIndex="1"/>
+            <Button fx:id="testScalingBtn" text="Test Scaling" onAction="#testScalingHandler" GridPane.columnIndex="4" GridPane.rowIndex="1"/>
             
             <!-- Progress Indicator -->
             <ProgressBar fx:id="progressBar" progress="0.0" 

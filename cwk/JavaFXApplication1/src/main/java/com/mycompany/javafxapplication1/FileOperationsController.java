@@ -38,7 +38,7 @@ public class FileOperationsController {
     @FXML private TableColumn<FileMetadata, String> fileNameColumn;
     @FXML private TableColumn<FileMetadata, String> ownerColumn;
     @FXML private TableColumn<FileMetadata, String> sizeColumn;
-    
+    @FXML private Button testScalingBtn;
     // Constants
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     
@@ -65,6 +65,60 @@ public class FileOperationsController {
         refreshFilesList();
         
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
+    }
+
+    //REMOVE
+    @FXML
+    private void testScalingHandler(ActionEvent event) {
+        setControlsEnabled(false);
+        
+        Task<Void> testTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                try {
+                    // Test scaling up (simulate high load)
+                    updateMessage("Testing scale up with high load...");
+                    loadBalancerClient.getLoadBalancer().simulateLoad(100); // High load
+                    Thread.sleep(5000); // Wait 5 seconds
+                    
+                    updateMessage("Waiting for scale up reaction...");
+                    Thread.sleep(2000);
+                    
+                    // Test scaling down (simulate low load)
+                    updateMessage("Testing scale down with low load...");
+                    loadBalancerClient.getLoadBalancer().simulateLoad(10); // Low load
+                    Thread.sleep(5000);
+                    
+                    updateMessage("Scaling test complete");
+                    return null;
+                } catch (Exception e) {
+                    updateMessage("Test failed: " + e.getMessage());
+                    throw e;
+                }
+            }
+        };
+        
+        testTask.messageProperty().addListener((obs, old, newMessage) -> {
+            Platform.runLater(() -> fileTextField.setText(newMessage));
+        });
+        
+        testTask.setOnSucceeded(e -> {
+            Platform.runLater(() -> {
+                setControlsEnabled(true);
+                showAlert(Alert.AlertType.INFORMATION, "Test Complete",
+                        "Scaling test completed. Check console for results.");
+            });
+        });
+        
+        testTask.setOnFailed(e -> {
+            Platform.runLater(() -> {
+                setControlsEnabled(true);
+                showAlert(Alert.AlertType.ERROR, "Test Failed",
+                        "Scaling test failed: " + testTask.getException().getMessage());
+            });
+        });
+        
+        new Thread(testTask).start();
     }
     
     /**

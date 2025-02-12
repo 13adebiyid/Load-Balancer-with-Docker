@@ -15,6 +15,7 @@ public class LoadBalancerClient {
     private int port;
     private boolean isConnected;
     private Random random;
+    private LoadBalancer loadBalancer;//remove---------------------------------
     
     // Constants for networking and delays
     private static final int CONNECTION_TIMEOUT = 120000; // 2 minutes to account for artificial delays
@@ -34,9 +35,21 @@ public class LoadBalancerClient {
 
         this.isConnected = false;
         this.random = new Random();
+        
+        this.loadBalancer = new LoadBalancer();//remove------------------------------
+        //REMOVE
+        loadBalancer.addContainer(new FileStorageContainer("container-1", "/storage/container1"));
+        loadBalancer.addContainer(new FileStorageContainer("container-2", "/storage/container2"));
+        loadBalancer.addContainer(new FileStorageContainer("container-3", "/storage/container3"));
+        loadBalancer.addContainer(new FileStorageContainer("container-4", "/storage/container4"));
+        
         testConnection();  // Initial connection test
     }
     
+    //remove-----------------------------------------
+     public LoadBalancer getLoadBalancer() {
+        return loadBalancer;
+    }
     
     /**
      * Uploads a file chunk to a storage container

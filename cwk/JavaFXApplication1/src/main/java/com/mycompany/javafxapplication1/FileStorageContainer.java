@@ -41,6 +41,16 @@ public class FileStorageContainer {
         System.out.println("Initializing container " + containerId + " with host: " + containerHost + " and storage path: " + storagePath);
     }
     
+    //REMOVE---------------------------------------
+    public void incrementActiveConnections() {
+        activeConnections.incrementAndGet();
+    }
+    
+    public void decrementActiveConnections() {
+        activeConnections.decrementAndGet();
+    }
+    
+    
     /**
      * Store a chunk of a file in this container
      * @param fileId Unique identifier for the file
