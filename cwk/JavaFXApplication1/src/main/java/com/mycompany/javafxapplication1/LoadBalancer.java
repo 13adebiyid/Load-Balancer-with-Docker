@@ -156,6 +156,10 @@ public class LoadBalancer {
         // Force a scaling check
         checkScaling();
     }
+    
+   
+  
+    
     //-----------------------------------------------------------------------------
     
     // Calculate average load across containers
