@@ -543,19 +543,10 @@ public class FileOperationsController {
                 final long finalBytesProcessed = bytesProcessed;
                 Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize));
                 
-                NetworkSimulator.simulateNetworkDelayWithProgress(
-                        "Uploading chunk " + chunk.getNumber(),
-                        progress -> Platform.runLater(() -> updateProgress(
-                                ((double)finalBytesProcessed / totalSize) +
-                                        (progress * chunk.getSize() / totalSize)
-                        ))
-                );
+                NetworkSimulator.simulateNetworkDelayWithProgress("Uploading chunk " + chunk.getNumber(),progress -> Platform.runLater(() -> updateProgress(((double)finalBytesProcessed / totalSize) +(progress * chunk.getSize() / totalSize))));
                 
-                containerId = loadBalancerClient.uploadFileChunk(
-                        fileId,
-                        chunk.getNumber(),
-                        chunk.getData()
-                );
+                containerId = loadBalancerClient.uploadFileChunk(fileId,chunk.getNumber(),chunk.getData());
+                
             } catch (ClassNotFoundException | InterruptedException ex) {
                 Logger.getLogger(FileOperationsController.class.getName())
                         .log(Level.SEVERE, null, ex);

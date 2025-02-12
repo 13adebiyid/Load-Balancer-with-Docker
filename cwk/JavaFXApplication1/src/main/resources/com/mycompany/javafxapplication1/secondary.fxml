@@ -27,7 +27,7 @@
                 <Label text="Custom data" GridPane.rowIndex="1" />
                 <TextField fx:id="customTextField" GridPane.columnIndex="1" GridPane.rowIndex="1" />
                 <Button fx:id="fileOperationsBtn" text="File Operations" onAction="#switchToFileOperations" GridPane.columnIndex="1" GridPane.rowIndex="2" />
-                <Button fx:id="secondaryButton" text="Return to Login" onAction="#switchToPrimary" GridPane.columnIndex="1" GridPane.rowIndex="3" />
+                <Button fx:id="secondaryButton" text="Logout" onAction="#switchToPrimary" GridPane.columnIndex="1" GridPane.rowIndex="3" />
                 <Button fx:id="refreshBtn" text="Refresh" onAction="#RefreshBtnHandler" GridPane.rowIndex="3" />
             </children>
         </GridPane>
