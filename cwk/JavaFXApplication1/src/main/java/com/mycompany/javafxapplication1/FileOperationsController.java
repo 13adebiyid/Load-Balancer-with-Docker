@@ -521,15 +521,7 @@ public class FileOperationsController {
         long totalSize = file.length();
         long bytesProcessed = 0;
         
-        // Simulate varying traffic conditions based on file size
-        if (totalSize > 10 * 1024 * 1024) { // 10MB
-            NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
-        } else if (totalSize > 5 * 1024 * 1024) { // 5MB
-            NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
-        } else {
-            NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
-        }
-        
+        // First, process all chunks without delay
         for (FileChunker.ChunkInfo chunk : chunks) {
             System.out.println("\nProcessing chunk " + chunk.getNumber());
             if (operationCancelled) {
@@ -539,48 +531,58 @@ public class FileOperationsController {
             
             String containerId = null;
             try {
-                // Simulate network delay with progress updates
+                // Update progress for chunk processing
                 final long finalBytesProcessed = bytesProcessed;
-                Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize));
+                Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize * 0.5)); // First 50% is chunk processing
                 
-                NetworkSimulator.simulateNetworkDelayWithProgress("Uploading chunk " + chunk.getNumber(),progress -> Platform.runLater(() -> updateProgress(((double)finalBytesProcessed / totalSize) +(progress * chunk.getSize() / totalSize))));
+                containerId = loadBalancerClient.uploadFileChunk(fileId, chunk.getNumber(), chunk.getData());
                 
-                containerId = loadBalancerClient.uploadFileChunk(fileId,chunk.getNumber(),chunk.getData());
-                
-            } catch (ClassNotFoundException | InterruptedException ex) {
-                Logger.getLogger(FileOperationsController.class.getName())
-                        .log(Level.SEVERE, null, ex);
-                throw new IOException("Upload failed due to interrupted network simulation", ex);
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                throw new IOException("Upload failed", ex);
             }
             
             if (containerId != null) {
-                System.out.println("Chunk " + chunk.getNumber() +
-                        " stored in container: " + containerId);
+                System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);
                 metadata.addChunkLocation(chunk.getNumber(), containerId);
                 
                 try {
-                    database.storeEncryptionKey(fileId, chunk.getNumber(),
-                            chunk.getEncryptionKey());
-                    System.out.println("Encryption key stored for chunk " +
-                            chunk.getNumber());
+                    database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
+                    System.out.println("Encryption key stored for chunk " + chunk.getNumber());
                 } catch (ClassNotFoundException ex) {
-                    Logger.getLogger(FileOperationsController.class.getName())
-                            .log(Level.SEVERE, null, ex);
+                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
                 }
                 
                 bytesProcessed += chunk.getSize();
             }
         }
         
-        // Save complete metadata to database
+        // After all chunks are processed, simulate network delay based on file size
         if (!operationCancelled) {
             try {
+                // Determine traffic level based on file size
+                if (totalSize > 10 * 1024 * 1024) { // 10MB
+                    NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
+                } else if (totalSize > 5 * 1024 * 1024) { // 5MB
+                    NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
+                } else {
+                    NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
+                }
+                
+                // Simulate network delay for the entire file
+                System.out.println("Simulating network delay for complete file transfer...");
+                NetworkSimulator.simulateNetworkDelayWithProgress(
+                        "Completing file transfer",
+                        progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5)) // Last 50% is network delay
+                );
+                
+                // Save metadata after successful transfer
                 database.saveFileMetadata(metadata);
-                System.out.println("Successfully saved metadata for file: " +
-                        metadata.getFileName());
-            } catch (ClassNotFoundException ex) {
-                Logger.getLogger(FileOperationsController.class.getName())
-                        .log(Level.SEVERE, null, ex);
+                System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
+                
+            } catch (InterruptedException | ClassNotFoundException ex) {
+                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                throw new IOException("Upload failed during network simulation", ex);
             }
         }
     }

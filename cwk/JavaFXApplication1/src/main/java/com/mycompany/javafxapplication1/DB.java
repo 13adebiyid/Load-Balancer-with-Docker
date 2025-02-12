@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -177,29 +178,29 @@ public class DB {
             System.out.println("Database tables initialized successfully");
             
         } catch (SQLException ex) {
-        // Rollback on error
-        try {
-            if (connection != null) {
-                connection.rollback();
+            // Rollback on error
+            try {
+                if (connection != null) {
+                    connection.rollback();
+                }
+            } catch (SQLException e) {
+                System.err.println("Error rolling back transaction: " + e.getMessage());
             }
-        } catch (SQLException e) {
-            System.err.println("Error rolling back transaction: " + e.getMessage());
-        }
-        Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
-                "Failed to create database tables", ex);
-        throw new RuntimeException("Database initialization failed", ex);
-    } finally {
-        try {
-            
-            if (connection != null) {
-                connection.setAutoCommit(true);  // Reset auto-commit
-                connection.close();
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
+                    "Failed to create database tables", ex);
+            throw new RuntimeException("Database initialization failed", ex);
+        } finally {
+            try {
+                
+                if (connection != null) {
+                    connection.setAutoCommit(true);  // Reset auto-commit
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("Error closing database resources: " + e.getMessage());
             }
-        } catch (SQLException e) {
-            System.err.println("Error closing database resources: " + e.getMessage());
         }
     }
-}
     
     /**
      * Initializes the database for first use or validates existing structure.
@@ -551,22 +552,37 @@ public class DB {
             statement.setQueryTimeout(timeout);
             
             try {
-                // Add file metadata
-                statement.executeUpdate(
-                        "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
-                                "VALUES ('" + metadata.getFileId() + "', '" + metadata.getFileName() + "', '" +
-                                metadata.getOwnerUser() + "', " + metadata.getTotalSize() + ", " +
-                                metadata.getTotalChunks() + ", " + (metadata.isShared() ? 1 : 0) + ")"
-                );
+                // Escape special characters in the file name and other strings
+                String escapedFileName = metadata.getFileName().replace("'", "''");
+                String escapedFileId = metadata.getFileId().replace("'", "''");
+                String escapedOwnerUser = metadata.getOwnerUser().replace("'", "''");
                 
-                // Add chunk locations
-                for (int i = 0; i < metadata.getTotalChunks(); i++) {
-                    String containerId = metadata.getContainerForChunk(i);
-                    if (containerId != null) {
-                        statement.executeUpdate(
-                                "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
-                                        "VALUES ('" + metadata.getFileId() + "', " + i + ", '" + containerId + "')"
-                        );
+                // Add file metadata using prepared statement to prevent SQL injection
+                String insertFileSql = "INSERT INTO files " +
+                        "(file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
+                        "VALUES (?, ?, ?, ?, ?, ?)";
+                
+                try (PreparedStatement pstmt = connection.prepareStatement(insertFileSql)) {
+                    pstmt.setString(1, metadata.getFileId());
+                    pstmt.setString(2, metadata.getFileName());
+                    pstmt.setString(3, metadata.getOwnerUser());
+                    pstmt.setLong(4, metadata.getTotalSize());
+                    pstmt.setInt(5, metadata.getTotalChunks());
+                    pstmt.setInt(6, metadata.isShared() ? 1 : 0);
+                    pstmt.executeUpdate();
+                }
+                
+                // Add chunk locations using prepared statement
+                String insertChunkSql = "INSERT INTO file_chunks (file_id, chunk_number, container_id) VALUES (?, ?, ?)";
+                try (PreparedStatement chunkStmt = connection.prepareStatement(insertChunkSql)) {
+                    for (int i = 0; i < metadata.getTotalChunks(); i++) {
+                        String containerId = metadata.getContainerForChunk(i);
+                        if (containerId != null) {
+                            chunkStmt.setString(1, metadata.getFileId());
+                            chunkStmt.setInt(2, i);
+                            chunkStmt.setString(3, containerId);
+                            chunkStmt.executeUpdate();
+                        }
                     }
                 }
                 
@@ -575,7 +591,9 @@ public class DB {
                 
             } catch (SQLException e) {
                 // If fail, rolls back the entire transaction
-                connection.rollback();
+                if (connection != null) {
+                    connection.rollback();
+                }
                 throw e;
             }
             
@@ -586,7 +604,7 @@ public class DB {
         } finally {
             try {
                 if (connection != null) {
-                    connection.setAutoCommit(true);
+                    connection.setAutoCommit(true);  // Reset auto-commit
                     connection.close();
                 }
             } catch (SQLException e) {
