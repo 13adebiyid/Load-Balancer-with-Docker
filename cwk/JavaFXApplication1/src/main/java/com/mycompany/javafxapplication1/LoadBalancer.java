@@ -1,12 +1,10 @@
 package com.mycompany.javafxapplication1;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * LoadBalancer class that distributes work across multiple file storage containers
@@ -23,6 +21,31 @@ public class LoadBalancer {
     private static final int HEALTH_CHECK_INTERVAL = 300;
     private DB database;
     
+    private static final int MIN_CONTAINERS = 4;
+    private static final int MAX_CONTAINERS = 10;
+    private static final double SCALE_UP_THRESHOLD = 0.8;   // 80% load triggers scale up
+    private static final double SCALE_DOWN_THRESHOLD = 0.3; // 30% load triggers scale down
+    
+    private Map<String, ContainerMetrics> containerMetrics;
+    
+    public class ContainerMetrics {
+        private int activeConnections;
+        private long bytesProcessed;
+        private long lastUsed;
+        
+        public ContainerMetrics() {
+            this.activeConnections = 0;
+            this.bytesProcessed = 0;
+            this.lastUsed = System.currentTimeMillis();
+        }
+        
+        public void updateMetrics(int connections, long bytes) {
+            this.activeConnections = connections;
+            this.bytesProcessed += bytes;
+            this.lastUsed = System.currentTimeMillis();
+        }
+    }
+    
     /**
      * Constructor - initializes the load balancer
      */
@@ -32,10 +55,156 @@ public class LoadBalancer {
         containerPriorities = new HashMap<>();
         currentContainerIndex = 0;
         currentAlgorithm = "RoundRobin";
-        random = new Random();
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
         this.database = new DB();
         startHealthChecks();
+        startScalingMonitor();
+    }
+    
+    private void startScalingMonitor() {
+        ScheduledExecutorService scalingExecutor = Executors.newSingleThreadScheduledExecutor();
+        scalingExecutor.scheduleAtFixedRate(this::checkScaling, 0, 60, TimeUnit.SECONDS);
+    }
+    
+    // Method to check if scaling is needed
+    private void checkScaling() {
+        double averageLoad = calculateAverageLoad();
+        System.out.println("Current system load: " + (averageLoad * 100) + "%");
+        
+        if (averageLoad > SCALE_UP_THRESHOLD && containers.size() < MAX_CONTAINERS) {
+            scaleUp();
+        } else if (averageLoad < SCALE_DOWN_THRESHOLD && containers.size() > MIN_CONTAINERS) {
+            scaleDown();
+        }
+    }
+    
+    // Calculate average load across containers
+    private double calculateAverageLoad() {
+        if (containers.isEmpty()) return 0.0;
+        
+        int totalConnections = 0;
+        for (FileStorageContainer container : containers) {
+            totalConnections += container.getActiveConnections();
+        }
+        
+        return (double) totalConnections / (containers.size() * 10); // Assuming 10 connections per container is 100% load
+    }
+    
+    // Method to add a new container
+    public void scaleUp() {
+        int newContainerNumber = containers.size() + 1;
+        String containerId = "container-" + newContainerNumber;
+        
+        try {
+            // Create new container using Docker API
+            Process process = Runtime.getRuntime().exec(
+                    "docker run -d --name " + containerId + " " +
+                            "--network comp20081-network " + // Connect to existing network
+                            "-v " + containerId + ":/storage " + // Mount storage volume
+                                    "ubuntu:latest"
+            );
+            
+            // Wait for container to start
+            if (process.waitFor() == 0) {
+                // Add new container to load balancer
+                FileStorageContainer newContainer = new FileStorageContainer(
+                        containerId,
+                        "/storage/" + containerId
+                );
+                addContainer(newContainer);
+                
+                System.out.println("Successfully scaled up: Added " + containerId);
+            } else {
+                System.err.println("Failed to create new container: " + containerId);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error scaling up: " + e.getMessage());
+        }
+    }
+    
+    // Method to remove a container
+    public void scaleDown() {
+        if (containers.size() <= MIN_CONTAINERS) {
+            return;
+        }
+        
+        // Find least used container
+        FileStorageContainer containerToRemove = findLeastUsedContainer();
+        if (containerToRemove == null) {
+            return;
+        }
+        
+        try {
+            // Migrate data from container before removing
+            moveContainerData(containerToRemove);
+            
+            // Remove container using Docker API
+            Process process = Runtime.getRuntime().exec(
+                    "docker rm -f " + containerToRemove.getId()
+            );
+            
+            if (process.waitFor() == 0) {
+                containers.remove(containerToRemove);
+                containerStatus.remove(containerToRemove.getId());
+                containerMetrics.remove(containerToRemove.getId());
+                
+                System.out.println("Successfully scaled down: Removed " + containerToRemove.getId());
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error scaling down: " + e.getMessage());
+        }
+    }
+    
+    // Helper method to find least used container
+    private FileStorageContainer findLeastUsedContainer() {
+        if (containers.isEmpty()) return null;
+        
+        return containers.stream()
+                .min((c1, c2) -> {
+                    ContainerMetrics m1 = containerMetrics.get(c1.getId());
+                    ContainerMetrics m2 = containerMetrics.get(c2.getId());
+                    return Long.compare(m1.bytesProcessed, m2.bytesProcessed);
+                })
+                .orElse(null);
+    }
+    
+    // Helper method to migrate data before removing container
+    private void moveContainerData(FileStorageContainer container) throws Exception {
+        // Get list of files in container
+        List<FileMetadata> containerFiles = database.getAllFiles().stream()
+                .filter(file -> file.getContainerForChunk(0).equals(container.getId()))
+                .collect(Collectors.toList());
+        
+        // Redistribute files to other containers
+        for (FileMetadata file : containerFiles) {
+            FileStorageContainer newContainer = getNextContainer();
+            if (newContainer != null && !newContainer.equals(container)) {
+                // Migrate file chunks to new container
+                for (int i = 0; i < file.getTotalChunks(); i++) {
+                    if (file.getContainerForChunk(i).equals(container.getId())) {
+                        // Read chunk from old container
+                        byte[] chunkData = container.retrieveFileChunk(
+                                file.getFileId(), i
+                        );
+                        
+                        // Store in new container
+                        newContainer.storeFileChunk(
+                                file.getFileId(), i, chunkData
+                        );
+                        
+                        // Update metadata
+                        file.addChunkLocation(i, newContainer.getId());
+                    }
+                }
+            }
+        }
+        
+        // Update database with new locations
+        for (FileMetadata file : containerFiles) {
+            database.saveFileMetadata(file);
+        }
     }
     
     //for health checking
@@ -49,13 +218,13 @@ public class LoadBalancer {
                     // Log container status changes
                     Boolean previousStatus = containerStatus.get(container.getId());
                     if (previousStatus != null && previousStatus != isHealthy) {
-                        System.out.println("Container " + container.getId() + 
-                                         " health status changed from " + 
-                                         previousStatus + " to " + isHealthy);
+                        System.out.println("Container " + container.getId() +
+                                " health status changed from " +
+                                previousStatus + " to " + isHealthy);
                     }
                 } catch (Exception e) {
-                    System.err.println("Error during health check for container " + 
-                                     container.getId() + ": " + e.getMessage());
+                    System.err.println("Error during health check for container " +
+                            container.getId() + ": " + e.getMessage());
                     updateContainerHealth(container.getId(), false);
                 }
             }
@@ -95,7 +264,7 @@ public class LoadBalancer {
             // For uploads, use load balancing to select container
             System.out.println("Upload operation - selecting container using load balancing");
             return getNextContainer();
-        } 
+        }
         else if ("DOWNLOAD".equalsIgnoreCase(operationType)) {
             try {
                 // Get file metadata from database
