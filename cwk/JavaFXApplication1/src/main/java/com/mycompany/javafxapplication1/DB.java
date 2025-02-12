@@ -103,16 +103,35 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            // Create users table (maintaining existing functionality)
+            connection.setAutoCommit(false);
+            
+            // Create users table with role column
             statement.executeUpdate("create table if not exists " + dataBaseTableName +
-                    "(id integer primary key autoincrement, name string, password string)");
+                    "(id integer primary key autoincrement, name string, password string, role string default 'STANDARD')");
+            
+            // Check for admin user within the same connection
+            ResultSet rs = statement.executeQuery("SELECT COUNT(*) as count FROM " + dataBaseTableName +
+                    " WHERE role = 'ADMIN'");
+            
+            if (rs.next() && rs.getInt("count") == 0) {
+                // Add admin user using the same connection
+                String adminPass = null;
+                try {
+                    adminPass = generateSecurePassword("admin");
+                } catch (InvalidKeySpecException ex) {
+                    Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                statement.executeUpdate("INSERT INTO " + dataBaseTableName +
+                        " (name, password, role) VALUES('admin', '" + adminPass + "', 'ADMIN')");
+                System.out.println("Added default admin user");
+            }
             
             statement.executeUpdate(
                     "create table if not exists file_permissions (" +
                             "file_id text," +                       // Links to files table
                             "user_name text," +                     // User who has permission
-                            "can_read integer default 0," +         // Read permission 
-                            "can_write integer default 0," +        // Write permission 
+                            "can_read integer default 0," +         // Read permission
+                            "can_write integer default 0," +        // Write permission
                             "date_granted timestamp default current_timestamp," + // When permission was granted
                             "granted_by text," +                    // Who granted the permission
                             "primary key (file_id, user_name)," +
@@ -129,7 +148,7 @@ public class DB {
                             "owner_user text not null," +           // User who owns this file
                             "total_size integer not null," +        // Total size in bytes
                             "total_chunks integer not null," +      // Number of chunks file is split into
-                            "is_shared integer default 0" +         // Whether file is shared 
+                            "is_shared integer default 0" +         // Whether file is shared
                             ")"
             );
             
@@ -149,28 +168,38 @@ public class DB {
                     "create table if not exists encryption_keys (" +
                             "file_id text," +                       // Links to files table
                             "chunk_number integer," +               // Which chunk this key is for
-                            "key_string text not null," +           //encryption key 
+                            "key_string text not null," +           //encryption key
                             "primary key (file_id, chunk_number)," +
                             "foreign key (file_id) references files(file_id)" +
                             ")"
             );
-            
+            connection.commit();
             System.out.println("Database tables initialized successfully");
             
         } catch (SQLException ex) {
-            Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
-                    "Failed to create database tables", ex);
-            throw new RuntimeException("Database initialization failed", ex);
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                System.err.println("Error closing database connection: " + e.getMessage());
+        // Rollback on error
+        try {
+            if (connection != null) {
+                connection.rollback();
             }
+        } catch (SQLException e) {
+            System.err.println("Error rolling back transaction: " + e.getMessage());
+        }
+        Logger.getLogger(DB.class.getName()).log(Level.SEVERE,
+                "Failed to create database tables", ex);
+        throw new RuntimeException("Database initialization failed", ex);
+    } finally {
+        try {
+            
+            if (connection != null) {
+                connection.setAutoCommit(true);  // Reset auto-commit
+                connection.close();
+            }
+        } catch (SQLException e) {
+            System.err.println("Error closing database resources: " + e.getMessage());
         }
     }
+}
     
     /**
      * Initializes the database for first use or validates existing structure.
@@ -350,31 +379,46 @@ public class DB {
      * @param user name of type String
      * @param password of type String
      */
-    public void addDataToDB(String user, String password) throws InvalidKeySpecException, ClassNotFoundException {
+    public void addDataToDB(String user, String password, String role)
+            throws InvalidKeySpecException, ClassNotFoundException {
+        Connection conn = null;
+        Statement stmt = null;
         try {
+            // Use a single connection
             Class.forName("org.sqlite.JDBC");
-            connection = DriverManager.getConnection(fileName);
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
-            System.out.println("Adding User: " + user + ", Password: " + password);
-            statement.executeUpdate("insert into " + dataBaseTableName + " (name, password) values('" + user + "','" + generateSecurePassword(password) + "')");
+            conn = DriverManager.getConnection(fileName);
+            conn.setAutoCommit(false);  // Start transaction
+            
+            stmt = conn.createStatement();
+            stmt.setQueryTimeout(timeout);
+            
+            String securePass = generateSecurePassword(password);
+            System.out.println("Adding User: " + user + ", Role: " + role);
+            
+            stmt.executeUpdate("INSERT INTO " + dataBaseTableName +
+                    " (name, password, role) VALUES('" + user + "','" +
+                    securePass + "','" + role + "')");
+            
+            conn.commit();  // Commit transaction
+            
         } catch (SQLException ex) {
+            try {
+                if (conn != null) {
+                    conn.rollback();  // Rollback on error
+                }
+            } catch (SQLException e) {
+                System.err.println("Error rolling back transaction: " + e.getMessage());
+            }
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
         } finally {
             try {
-                if (connection != null) {
-                    connection.close();
+                if (stmt != null) stmt.close();
+                if (conn != null) {
+                    conn.setAutoCommit(true);  // Reset auto-commit
+                    conn.close();
                 }
-            } catch (SQLException ex) {
-                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-            } finally {
-                try {
-                    if (connection != null) {
-                        connection.close();
-                    }
-                } catch (SQLException e) {
-                    System.err.println(e.getMessage());
-                }
+            } catch (SQLException e) {
+                System.err.println("Error closing database resources: " + e.getMessage());
             }
         }
     }
@@ -424,7 +468,7 @@ public class DB {
             statement.setQueryTimeout(timeout);
             ResultSet rs = statement.executeQuery("select name, password from " + this.dataBaseTableName);
             String inPass = generateSecurePassword(pass);
-
+            
             while (rs.next()) {
                 if (user.equals(rs.getString("name")) && rs.getString("password").equals(inPass)) {
                     flag = true;
@@ -542,7 +586,7 @@ public class DB {
         } finally {
             try {
                 if (connection != null) {
-                    connection.setAutoCommit(true);  
+                    connection.setAutoCommit(true);
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -652,7 +696,7 @@ public class DB {
             );
             
             if (ownerRs.next() && userName.equals(ownerRs.getString("owner_user"))) {
-                return true;  
+                return true;
             }
             
             // Check other permissions
@@ -672,7 +716,7 @@ public class DB {
                 }
             }
             
-            return false; 
+            return false;
             
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
@@ -795,21 +839,46 @@ public class DB {
     }
     
     private String getMySQLUrl() {
-        return String.format("jdbc:mysql://%s:%s/%s", 
-            MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE);
+        return String.format("jdbc:mysql://%s:%s/%s",
+                MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE);
     }
     
     // Add method to test MySQL connection
     public boolean testMySQLConnection() {
         try {
             Connection conn = DriverManager.getConnection(
-                getMySQLUrl(), MYSQL_USER, MYSQL_PASSWORD);
+                    getMySQLUrl(), MYSQL_USER, MYSQL_PASSWORD);
             conn.close();
             return true;
         } catch (SQLException e) {
             System.err.println("MySQL connection failed: " + e.getMessage());
             return false;
         }
+    }
+    
+    public String getUserRole(String username) throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            ResultSet rs = statement.executeQuery("SELECT role FROM " + dataBaseTableName +
+                    " WHERE name = '" + username + "'");
+            if (rs.next()) {
+                return rs.getString("role");
+            }
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+        return "STANDARD";
     }
     
 }

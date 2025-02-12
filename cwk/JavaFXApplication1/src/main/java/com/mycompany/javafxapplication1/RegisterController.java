@@ -89,7 +89,7 @@ public class RegisterController {
             FXMLLoader loader = new FXMLLoader();
             DB myObj = new DB();
             if (passPasswordField.getText().equals(rePassPasswordField.getText())) {
-                myObj.addDataToDB(userTextField.getText(), passPasswordField.getText());
+                myObj.addDataToDB(userTextField.getText(), passPasswordField.getText(), "STANDARD");
                 dialogue("Adding information to the database", "Successful!");
                 String[] credentials = {userTextField.getText(), passPasswordField.getText()};
                 loader.setLocation(getClass().getResource("secondary.fxml"));

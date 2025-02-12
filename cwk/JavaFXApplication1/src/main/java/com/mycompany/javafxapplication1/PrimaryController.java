@@ -67,24 +67,37 @@ public class PrimaryController {
         try {
             DB myObj = new DB();
             String[] credentials = {userTextField.getText(), passPasswordField.getText()};
-            if(myObj.validateUser(userTextField.getText(), passPasswordField.getText())){
-                FXMLLoader loader = new FXMLLoader();
-                loader.setLocation(getClass().getResource("secondary.fxml"));
-                Parent root = loader.load();
-                Scene scene = new Scene(root, 640, 480);
-                secondaryStage.setScene(scene);
-                SecondaryController controller = loader.getController();
-                controller.initialise(credentials);
-                secondaryStage.setTitle("Show Users");
-                String msg="some data sent from Primary Controller";
+            if(myObj.validateUser(userTextField.getText(), passPasswordField.getText())) {
+                String userRole = myObj.getUserRole(userTextField.getText());
+                FXMLLoader loader;
+                
+                if ("ADMIN".equals(userRole)) {
+                    // Admin goes to user management screen
+                    loader = new FXMLLoader(getClass().getResource("secondary.fxml"));
+                    Parent root = loader.load();
+                    Scene scene = new Scene(root, 640, 480);
+                    secondaryStage.setScene(scene);
+                    SecondaryController controller = loader.getController();
+                    controller.initialise(credentials);
+                    secondaryStage.setTitle("User Management");
+                } else {
+                    // Standard users go directly to file operations
+                    loader = new FXMLLoader(getClass().getResource("file_operations.fxml"));
+                    Parent root = loader.load();
+                    Scene scene = new Scene(root, 640, 480);
+                    secondaryStage.setScene(scene);
+                    FileOperationsController controller = loader.getController();
+                    controller.setCurrentUser(userTextField.getText());
+                    secondaryStage.setTitle("File Operations");
+                }
+                
+                String msg = "Hello World... oh and hello " + userTextField.getText();
                 secondaryStage.setUserData(msg);
                 secondaryStage.show();
                 primaryStage.close();
+            } else {
+                dialogue("Invalid User Name / Password", "Please try again!");
             }
-            else{
-                dialogue("Invalid User Name / Password","Please try again!");
-            }
-            
         } catch (Exception e) {
             e.printStackTrace();
         }

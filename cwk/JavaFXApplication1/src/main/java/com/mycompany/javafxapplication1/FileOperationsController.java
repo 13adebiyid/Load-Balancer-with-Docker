@@ -521,6 +521,15 @@ public class FileOperationsController {
         long totalSize = file.length();
         long bytesProcessed = 0;
         
+        // Simulate varying traffic conditions based on file size
+        if (totalSize > 10 * 1024 * 1024) { // 10MB
+            NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
+        } else if (totalSize > 5 * 1024 * 1024) { // 5MB
+            NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
+        } else {
+            NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
+        }
+        
         for (FileChunker.ChunkInfo chunk : chunks) {
             System.out.println("\nProcessing chunk " + chunk.getNumber());
             if (operationCancelled) {
@@ -530,29 +539,45 @@ public class FileOperationsController {
             
             String containerId = null;
             try {
+                // Simulate network delay with progress updates
+                final long finalBytesProcessed = bytesProcessed;
+                Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize));
+                
+                NetworkSimulator.simulateNetworkDelayWithProgress(
+                        "Uploading chunk " + chunk.getNumber(),
+                        progress -> Platform.runLater(() -> updateProgress(
+                                ((double)finalBytesProcessed / totalSize) +
+                                        (progress * chunk.getSize() / totalSize)
+                        ))
+                );
+                
                 containerId = loadBalancerClient.uploadFileChunk(
                         fileId,
                         chunk.getNumber(),
                         chunk.getData()
                 );
-            } catch (ClassNotFoundException ex) {
-                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (ClassNotFoundException | InterruptedException ex) {
+                Logger.getLogger(FileOperationsController.class.getName())
+                        .log(Level.SEVERE, null, ex);
+                throw new IOException("Upload failed due to interrupted network simulation", ex);
             }
             
             if (containerId != null) {
-                System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);
-                // Update metadata with chunk location
+                System.out.println("Chunk " + chunk.getNumber() +
+                        " stored in container: " + containerId);
                 metadata.addChunkLocation(chunk.getNumber(), containerId);
+                
                 try {
-                    database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
-                    System.out.println("Encryption key stored for chunk " + chunk.getNumber());
+                    database.storeEncryptionKey(fileId, chunk.getNumber(),
+                            chunk.getEncryptionKey());
+                    System.out.println("Encryption key stored for chunk " +
+                            chunk.getNumber());
                 } catch (ClassNotFoundException ex) {
-                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(FileOperationsController.class.getName())
+                            .log(Level.SEVERE, null, ex);
                 }
                 
                 bytesProcessed += chunk.getSize();
-                final double progress = (double) bytesProcessed / totalSize;
-                Platform.runLater(() -> updateProgress(progress));
             }
         }
         
@@ -560,9 +585,11 @@ public class FileOperationsController {
         if (!operationCancelled) {
             try {
                 database.saveFileMetadata(metadata);
-                System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
+                System.out.println("Successfully saved metadata for file: " +
+                        metadata.getFileName());
             } catch (ClassNotFoundException ex) {
-                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(FileOperationsController.class.getName())
+                        .log(Level.SEVERE, null, ex);
             }
         }
     }
