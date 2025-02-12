@@ -116,6 +116,17 @@ public class DB {
             }
             
             statement.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS sessions (" +
+                    "session_id TEXT PRIMARY KEY," +
+                    "user_name TEXT NOT NULL," +
+                    "login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                    "expires_at TIMESTAMP," +
+                    "FOREIGN KEY (user_name) REFERENCES " + dataBaseTableName + "(name)" +
+                ")"
+            );
+            
+            statement.executeUpdate(
                     "create table if not exists file_permissions (" +
                             "file_id text," +                       // Links to files table
                             "user_name text," +                     // User who has permission
@@ -885,6 +896,43 @@ public class DB {
             }
         }
         return "STANDARD";
+    }
+    
+    public void createUserSession(String userName) throws SQLException, ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            String sessionId = UUID.randomUUID().toString();
+            statement.executeUpdate(
+                "INSERT INTO sessions (session_id, user_name, expires_at) " +
+                "VALUES ('" + sessionId + "', '" + userName + "', " +
+                "datetime('now', '+24 hours'))"
+            );
+            
+        } finally {
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+    
+    public void cleanupExpiredSessions() throws SQLException, ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            statement.executeUpdate("DELETE FROM sessions WHERE expires_at < datetime('now')");
+            
+        } finally {
+            if (connection != null) {
+                connection.close();
+            }
+        }
     }
     
 }

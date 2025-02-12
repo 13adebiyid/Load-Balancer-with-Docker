@@ -13,17 +13,19 @@ public class MySQLDB {
     private static final String MYSQL_URL = "jdbc:mysql://localhost:3306/comp20081";
     private static final String MYSQL_USER = "root";
     private static final String MYSQL_PASSWORD = "root";
-    
     private Connection mysqlConnection;
     private final DB sqliteDB;
     private final ScheduledExecutorService syncExecutor;
+    private final ScheduledExecutorService cleanupExecutor;
     private static final Logger logger = Logger.getLogger(MySQLDB.class.getName());
     
     public MySQLDB(DB sqliteDB) {
         this.sqliteDB = sqliteDB;
         this.syncExecutor = Executors.newSingleThreadScheduledExecutor();
+        this.cleanupExecutor = Executors.newSingleThreadScheduledExecutor();
         initializeDatabase();
         startSyncScheduler();
+        startCleanupScheduler();
     }
     
     /**
@@ -37,47 +39,16 @@ public class MySQLDB {
             // Create required tables
             try (Statement stmt = mysqlConnection.createStatement()) {
                 // Users table
-                stmt.executeUpdate(
-                        "CREATE TABLE IF NOT EXISTS users (" +
-                                "id INT PRIMARY KEY AUTO_INCREMENT, " +
-                                "name VARCHAR(255) NOT NULL UNIQUE, " +
-                                "password VARCHAR(255) NOT NULL, " +
-                                "is_admin BOOLEAN DEFAULT FALSE, " +
-                                "last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-                );
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(255) NOT NULL UNIQUE, password VARCHAR(255) NOT NULL, is_admin BOOLEAN DEFAULT FALSE, last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
                 
                 // Files table
-                stmt.executeUpdate(
-                        "CREATE TABLE IF NOT EXISTS files (" +
-                                "file_id VARCHAR(255) PRIMARY KEY, " +
-                                "file_name VARCHAR(255) NOT NULL, " +
-                                "owner_user VARCHAR(255) NOT NULL, " +
-                                "total_size BIGINT NOT NULL, " +
-                                "total_chunks INT NOT NULL, " +
-                                "is_shared BOOLEAN DEFAULT FALSE, " +
-                                "last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-                );
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS files (file_id VARCHAR(255) PRIMARY KEY, file_name VARCHAR(255) NOT NULL, owner_user VARCHAR(255) NOT NULL, total_size BIGINT NOT NULL, total_chunks INT NOT NULL, is_shared BOOLEAN DEFAULT FALSE, last_sync TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
                 
                 // File chunks table
-                stmt.executeUpdate(
-                        "CREATE TABLE IF NOT EXISTS file_chunks (" +
-                                "file_id VARCHAR(255), " +
-                                "chunk_number INT, " +
-                                "container_id VARCHAR(255) NOT NULL, " +
-                                "PRIMARY KEY (file_id, chunk_number), " +
-                                "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
-                );
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS file_chunks (file_id VARCHAR(255), chunk_number INT, container_id VARCHAR(255) NOT NULL, PRIMARY KEY (file_id, chunk_number), FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)");
                 
                 // File permissions table
-                stmt.executeUpdate(
-                        "CREATE TABLE IF NOT EXISTS file_permissions (" +
-                                "file_id VARCHAR(255), " +
-                                "user_name VARCHAR(255), " +
-                                "can_read BOOLEAN DEFAULT FALSE, " +
-                                "can_write BOOLEAN DEFAULT FALSE, " +
-                                "PRIMARY KEY (file_id, user_name), " +
-                                "FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)"
-                );
+                stmt.executeUpdate("CREATE TABLE IF NOT EXISTS file_permissions (file_id VARCHAR(255), user_name VARCHAR(255), can_read BOOLEAN DEFAULT FALSE, can_write BOOLEAN DEFAULT FALSE, PRIMARY KEY (file_id, user_name), FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE)");
                 
                 logger.info("MySQL tables initialized successfully");
             }
@@ -94,6 +65,17 @@ public class MySQLDB {
     private void startSyncScheduler() {
         syncExecutor.scheduleAtFixedRate(this::synchronizeDatabases,
                 0, 5, TimeUnit.MINUTES);
+    }
+    
+    private void startCleanupScheduler() {
+        // Run cleanup every hour
+        cleanupExecutor.scheduleAtFixedRate(() -> {
+            try {
+                sqliteDB.cleanupExpiredSessions();
+            } catch (Exception e) {
+                logger.severe("Failed to cleanup temporary data: " + e.getMessage());
+            }
+        }, 1, 60, TimeUnit.MINUTES);
     }
     
     /**
@@ -139,14 +121,13 @@ public class MySQLDB {
         ObservableList<User> sqliteUsers = sqliteDB.getDataFromTable();
         
         // Prepare MySQL statement
-        String insertUser = "INSERT INTO users (name, password) VALUES (?, ?) " +
-                "ON DUPLICATE KEY UPDATE password = ?";
+        String upsertUser = "INSERT INTO users (name, password, role) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE password = VALUES(password), role = VALUES(role)";
         
-        try (PreparedStatement pstmt = mysqlConnection.prepareStatement(insertUser)) {
+        try (PreparedStatement pstmt = mysqlConnection.prepareStatement(upsertUser)) {
             for (User user : sqliteUsers) {
                 pstmt.setString(1, user.getUser());
                 pstmt.setString(2, user.getPass());
-                pstmt.setString(3, user.getPass());
+                pstmt.setString(3, user.getRole());
                 pstmt.executeUpdate();
             }
         }
@@ -160,13 +141,8 @@ public class MySQLDB {
         List<FileMetadata> sqliteFiles = sqliteDB.getAllFiles();
         
         // Prepare MySQL statements
-        String insertFile = "INSERT INTO files (file_id, file_name, owner_user, total_size, " +
-                "total_chunks, is_shared) VALUES (?, ?, ?, ?, ?, ?) " +
-                "ON DUPLICATE KEY UPDATE file_name = ?, owner_user = ?, " +
-                "total_size = ?, total_chunks = ?, is_shared = ?";
-        
-        String insertChunk = "INSERT INTO file_chunks (file_id, chunk_number, container_id) " +
-                "VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE container_id = ?";
+        String insertFile = "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE file_name = ?, owner_user = ?, total_size = ?, total_chunks = ?, is_shared = ?";
+        String insertChunk = "INSERT INTO file_chunks (file_id, chunk_number, container_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE container_id = ?";
         
         try (PreparedStatement fileStmt = mysqlConnection.prepareStatement(insertFile);
                 PreparedStatement chunkStmt = mysqlConnection.prepareStatement(insertChunk)) {

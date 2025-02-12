@@ -14,7 +14,7 @@ public class ContainerSSH {
     private JSch jsch;
     private Session session;
     private ChannelShell channel;
-    private PrintStream commander;
+    private OutputStream commander;         // Changed to OutputStream for sending commands
     private ByteArrayOutputStream responseStream;
     
     public ContainerSSH() {
@@ -22,12 +22,10 @@ public class ContainerSSH {
         responseStream = new ByteArrayOutputStream();
     }
     
-    /**
-     * Connects to a container via SSH
-     */
     public void connect(String containerId, String username, String password) throws JSchException {
         try {
-            jsch = new JSch();
+            // Close existing connections if any
+            disconnect();
             
             // Map container ID to its Docker network alias
             String host = containerId.replace("container-", "storage");
@@ -44,50 +42,94 @@ public class ContainerSSH {
             
             // Connect with timeout
             session.connect(5000);
+            
+            // Create and connect shell channel
+            channel = (ChannelShell) session.openChannel("shell");
+            
+            // Set up input/output streams
+            responseStream = new ByteArrayOutputStream();
+            channel.setOutputStream(responseStream);
+            try {
+                commander = channel.getOutputStream();  // Get output stream for sending commands
+            } catch (IOException ex) {
+                Logger.getLogger(ContainerSSH.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            
+            // Connect the channel
+            channel.connect(3000);
+            
             logger.info("Successfully connected to " + host);
             
         } catch (JSchException e) {
+            disconnect(); // Clean up on failure
             logger.severe("Failed to connect to " + containerId + ": " + e.getMessage());
             throw e;
         }
     }
     
-    /**
-     * Executes a command in the container
-     */
-    public String executeCommand(String command) throws IOException {
-        ChannelExec channel = null;
+    public void disconnect() {
         try {
-            channel = (ChannelExec)session.openChannel("exec");
+            if (commander != null) {
+                commander.close();
+                commander = null;
+            }
+        } catch (IOException e) {
+            logger.warning("Error closing command stream: " + e.getMessage());
+        }
+        
+        if (channel != null) {
+            channel.disconnect();
+            channel = null;
+        }
+        
+        if (session != null) {
+            session.disconnect();
+            session = null;
+        }
+        
+        responseStream.reset();
+        logger.info("Disconnected from container");
+    }
+    
+    public String executeCommand(String command) throws IOException {
+        if (!isConnected()) {
+            throw new IOException("Not connected to container");
+        }
+        
+        try {
+            // Send command with newline
+            commander.write((command + "\n").getBytes());
+            commander.flush();
             
-            // Create streams for output
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            channel.setOutputStream(outputStream);
+            // Wait for response
+            Thread.sleep(1000);  // Give more time for command execution
             
-            // Execute command
-            channel.setCommand(command);
-            channel.connect();
+            // Get and process response
+            String response = responseStream.toString();
+            responseStream.reset();
             
-            // Wait for command to complete
-            while (!channel.isClosed()) {
-                Thread.sleep(100);
+            // Clean up the response by removing command echo and prompt
+            String[] lines = response.split("\n");
+            StringBuilder cleanResponse = new StringBuilder();
+            for (String line : lines) {
+                // Skip the command echo and prompt lines
+                if (!line.trim().equals(command) && !line.matches(".*[@].*[#$]\\s*$")) {
+                    cleanResponse.append(line).append("\n");
+                }
             }
             
-            return outputStream.toString();
+            return cleanResponse.toString();
             
         } catch (Exception e) {
             throw new IOException("Command execution failed: " + e.getMessage());
-        } finally {
-            if (channel != null) {
-                channel.disconnect();
-            }
         }
     }
     
-    /**
-     * Gets system information from the container and formats info for easier read 
-     */
     public String getSystemInfo() throws IOException {
+        if (!isConnected()) {
+            throw new IOException("Not connected to container");
+        }
+        
         StringBuilder info = new StringBuilder();
         info.append("=== System Information ===\n");
         info.append(executeCommand("uname -a")).append("\n");
@@ -100,30 +142,9 @@ public class ContainerSSH {
         return info.toString();
     }
     
-    /**
-     * Disconnects from container
-     */
-    public void disconnect() {
-        if (commander != null) {
-            commander.close();
-        }
-        
-        if (channel != null) {
-            channel.disconnect();
-        }
-        
-        if (session != null) {
-            session.disconnect();
-        }
-        
-        logger.info("Disconnected from container");
-    }
-    
-    /**
-     * Checks if connected to container
-     */
     public boolean isConnected() {
         return session != null && session.isConnected() &&
-                channel != null && channel.isConnected();
+                channel != null && channel.isConnected() &&
+                commander != null;
     }
 }
