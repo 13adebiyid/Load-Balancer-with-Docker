@@ -503,6 +503,14 @@ public class FileOperationsController {
      * Uploads a file in chunks using the load balancer
      */
     private void uploadFileInChunks(File file, String fileId) throws IOException {
+        
+        FileLockManager lockManager = FileLockManager.getInstance();
+        
+        // attempt to acquire lock for upload
+        if (!lockManager.lockFile(fileId, "UPLOAD", currentUser)) {
+            throw new IOException("File is locked by another operation. Please try again later.");
+        }
+        
         System.out.println("\nDebug: Starting upload process");
         System.out.println("File: " + file.getName());
         System.out.println("File ID: " + fileId);
@@ -583,6 +591,9 @@ public class FileOperationsController {
             } catch (InterruptedException | ClassNotFoundException ex) {
                 Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
                 throw new IOException("Upload failed during network simulation", ex);
+            }finally{
+                lockManager.unlockFile(fileId, currentUser);
+                
             }
         }
     }
@@ -611,63 +622,110 @@ public class FileOperationsController {
     private void downloadAndAssembleFile(String fileId, File outputFile)
             throws IOException, ClassNotFoundException {
         
-        System.out.println("DEBUG: Starting download for file ID: " + fileId);
+        FileLockManager lockManager = FileLockManager.getInstance();
         
-        FileMetadata metadata = database.getFileMetadata(fileId);
-        if (metadata == null) {
-            throw new IOException("File metadata not found");
-        }
-        
-        List<FileChunker.ChunkInfo> chunks = new ArrayList<>();
-        long bytesProcessed = 0;
-        
-        // Create MessageDigest for checksum calculation
-        MessageDigest md;
         try {
-            md = MessageDigest.getInstance("SHA-256");
-        } catch (Exception e) {
-            throw new IOException("Failed to initialize checksum", e);
-        }
-        
-        for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
-            if (operationCancelled) break;
-            
-            System.out.println("DEBUG: Requesting chunk " + chunkNumber + " from load balancer...");
-            
-            // Get encrypted chunk data
-            byte[] encryptedData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
-            System.out.println("DEBUG: Received chunk " + chunkNumber + ", size: " + encryptedData.length);
-            
-            // Calculate checksum of encrypted data
-            md.reset();
-            md.update(encryptedData);
-            String checksum = Base64.getEncoder().encodeToString(md.digest());
-            
-            // Get encryption key
-            String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
-            if (encryptionKey == null) {
-                throw new IOException("Missing encryption key for chunk " + chunkNumber);
+            // Attempt to acquire lock for download
+            if (!lockManager.lockFile(fileId, "DOWNLOAD", currentUser)) {
+                throw new IOException("File is locked by another operation. Please try again later.");
             }
             
-            // Create chunk info with proper checksum
-            FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
-                    chunkNumber,
-                    encryptedData.length,
-                    checksum,  // Include checksum calculated from encrypted data
-                    encryptionKey,
-                    encryptedData
-            );
+            System.out.println("Starting download for file ID: " + fileId + "...");
             
-            chunks.add(chunk);
-            bytesProcessed += encryptedData.length;
+            // Get file metadata
+            FileMetadata metadata = database.getFileMetadata(fileId);
+            if (metadata == null) {
+                throw new IOException("File metadata not found");
+            }
             
-            final double progress = (double) bytesProcessed / metadata.getTotalSize();
-            Platform.runLater(() -> updateProgress(progress));
-        }
-        
-        if (!operationCancelled) {
-            FileChunker chunker = new FileChunker();
-            chunker.reassembleFile(chunks, outputFile);
+            // Determine traffic level based on file size
+            if (metadata.getTotalSize() > 10 * 1024 * 1024) { // > 10MB
+                NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
+            } else if (metadata.getTotalSize() > 5 * 1024 * 1024) { // > 5MB
+                NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
+            } else {
+                NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
+            }
+            
+            List<FileChunker.ChunkInfo> chunks = new ArrayList<>();
+            long bytesProcessed = 0;
+            
+            // Create MessageDigest for checksum verification
+            MessageDigest md;
+            try {
+                md = MessageDigest.getInstance("SHA-256");
+            } catch (Exception e) {
+                throw new IOException("Failed to initialize checksum", e);
+            }
+            
+            // First phase (0-50%): Download and verify all chunks
+            for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
+                if (operationCancelled) break;
+                
+                System.out.println("Requesting chunk " + chunkNumber + " from load balancer...");
+                
+                try {
+                    // Get encrypted chunk data
+                    byte[] encryptedData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
+                    System.out.println("Received chunk " + chunkNumber + ", size: " + encryptedData.length);
+                    
+                    // Verify chunk integrity with checksum
+                    md.reset();
+                    md.update(encryptedData);
+                    String checksum = Base64.getEncoder().encodeToString(md.digest());
+                    
+                    // Get encryption key for this chunk
+                    String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
+                    if (encryptionKey == null) {
+                        throw new IOException("Missing encryption key for chunk " + chunkNumber);
+                    }
+                    
+                    // Create chunk info object
+                    FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
+                            chunkNumber,
+                            encryptedData.length,
+                            checksum,
+                            encryptionKey,
+                            encryptedData
+                    );
+                    
+                    chunks.add(chunk);
+                    bytesProcessed += encryptedData.length;
+                    
+                    // Update progress for chunk download (0-50% range)
+                    final double progress = (double) bytesProcessed / metadata.getTotalSize() * 0.5;
+                    Platform.runLater(() -> updateProgress(progress));
+                    
+                } catch (Exception e) {
+                    throw new IOException("Failed to download chunk " + chunkNumber + ": " + e.getMessage(), e);
+                }
+            }
+            
+            // Second phase (50-100%): Simulate network delay and reassemble file
+            if (!operationCancelled) {
+                try {
+                    // Simulate network delay with progress updates
+                    System.out.println("Simulating network delay for file assembly...");
+                    NetworkSimulator.simulateNetworkDelayWithProgress(
+                            "Assembling file chunks",
+                            progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5))
+                    );
+                    
+                    // Reassemble the file from chunks
+                    FileChunker chunker = new FileChunker();
+                    chunker.reassembleFile(chunks, outputFile);
+                    
+                    System.out.println("File download and assembly completed successfully");
+                    
+                } catch (InterruptedException e) {
+                    throw new IOException("Download interrupted during network simulation", e);
+                }
+            }
+            
+        } finally {
+            // Always release the lock, even if an error occurred
+            lockManager.unlockFile(fileId, currentUser);
+            System.out.println("Released lock for file: " + fileId);
         }
     }
     
@@ -757,34 +815,88 @@ public class FileOperationsController {
         setControlsEnabled(false);
         
         new Thread(() -> {
+            FileLockManager lockManager = FileLockManager.getInstance();
+            
             try {
-                // Delete file chunks from storage containers
-                List<String> containers = fileContainerMap.get(file.getFileId());
-                if (containers != null) {
-                    for (String containerId : containers) {
-                        // Implement actual deletion from containers here
-                        System.out.println("Deleting chunks from container: " + containerId);
+                // First, attempt to acquire a lock on the file to prevent concurrent access
+                if (!lockManager.lockFile(file.getFileId(), "DELETE", currentUser)) {
+                    Platform.runLater(() -> {
+                        setControlsEnabled(true);
+                        showAlert(Alert.AlertType.WARNING, "File Locked",
+                                "File is currently in use by another operation. Please try again later.");
+                    });
+                    return;
+                }
+                
+                // Delete chunks from containers with progress tracking
+                int totalChunks = file.getTotalChunks();
+                int chunksProcessed = 0;
+                
+                // Iterate through each chunk location and delete from containers
+                for (int i = 0; i < totalChunks; i++) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new InterruptedException("Delete operation cancelled");
+                    }
+                    
+                    String containerId = file.getContainerForChunk(i);
+                    if (containerId != null) {
+                        System.out.println("Deleting chunk " + i + " from container: " + containerId);
+                        
+                        try {
+                            // Delete the chunk from the container
+                            FileStorageContainer container = getContainerById(containerId);
+                            if (container != null) {
+                                String chunkPath = "/storage/" + containerId + "/" + file.getFileId() + "_chunk_" + i; 
+                                container.deleteFileChunk(chunkPath);
+                            }
+                            
+                            // Update progress as each chunk is deleted
+                            chunksProcessed++;
+                            final double progress = (double) chunksProcessed / totalChunks;
+                            Platform.runLater(() -> updateProgress(progress));
+                            
+                        } catch (Exception e) {
+                            throw new IOException("Failed to delete chunk " + i +
+                                    " from container " + containerId, e);
+                        }
                     }
                 }
                 
-                // Delete metadata from database
+                // After all chunks are deleted, remove the metadata from database
                 database.deleteFileMetadata(file.getFileId());
                 
+                // Update UI with success message
                 Platform.runLater(() -> {
                     refreshFilesList();
                     setControlsEnabled(true);
+                    updateProgress(1.0);
                     showAlert(Alert.AlertType.INFORMATION, "Success",
                             "File deleted successfully");
                 });
                 
             } catch (Exception e) {
+                final String errorMessage = e.getMessage();
                 Platform.runLater(() -> {
                     setControlsEnabled(true);
                     showAlert(Alert.AlertType.ERROR, "Delete Error",
-                            "Failed to delete file: " + e.getMessage());
+                            "Failed to delete file: " + errorMessage);
                 });
+                
+            } finally {
+                // Always release the lock, even if deletion failed
+                lockManager.unlockFile(file.getFileId(), currentUser);
+                System.out.println("Released lock for file: " + file.getFileId());
             }
         }).start();
+    }
+    
+// Helper method to find container by ID
+    private FileStorageContainer getContainerById(String containerId) {
+        // This method would need to be implemented to retrieve the appropriate
+        // container instance based on the ID
+        // You might want to maintain a map of containers or retrieve them from
+        // your load balancer
+        return null; // Implement actual container lookup logic
     }
     
     private void setControlsEnabledImpl(boolean enabled) {

@@ -155,7 +155,54 @@ public class FileStorageContainer {
         }
     }
     
-    
+    /**
+     * Deletes a chunk of a file from this container
+     * @param chunkPath The path to the chunk file in the container
+     * @throws IOException if deletion fails
+     */
+    public void deleteFileChunk(String chunkPath) throws IOException {
+        ChannelSftp sftpChannel = null;
+        Session session = null;
+        
+        try {
+            JSch jsch = new JSch();
+            session = jsch.getSession("root", containerHost, containerPort);
+            session.setPassword("root");
+            
+            Properties config = new Properties();
+            config.put("StrictHostKeyChecking", "no");
+            session.setConfig(config);
+            
+            System.out.println("Connecting to " + containerHost + " to delete chunk: " + chunkPath);
+            session.connect(5000);
+            
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect();
+            
+            try {
+                // Attempt to delete the chunk file
+                sftpChannel.rm(chunkPath);
+                System.out.println("Successfully deleted chunk: " + chunkPath);
+                
+            } catch (SftpException e) {
+                String error = "Failed to delete chunk at " + chunkPath + ": " + e.getMessage();
+                System.err.println(error);
+                throw new IOException(error, e);
+            }
+            
+        } catch (JSchException e) {
+            String error = "Failed to connect to container " + containerHost + ": " + e.getMessage();
+            System.err.println(error);
+            throw new IOException(error, e);
+        } finally {
+            if (sftpChannel != null) {
+                sftpChannel.disconnect();
+            }
+            if (session != null) {
+                session.disconnect();
+            }
+        }
+    }
     
     public boolean checkHealth() {
         Session session = null;
