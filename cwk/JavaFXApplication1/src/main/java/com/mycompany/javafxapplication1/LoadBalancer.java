@@ -66,7 +66,7 @@ public class LoadBalancer {
     
     private void startScalingMonitor() {
         ScheduledExecutorService scalingExecutor = Executors.newSingleThreadScheduledExecutor();
-        scalingExecutor.scheduleAtFixedRate(this::checkScaling, 0, 60, TimeUnit.SECONDS);
+        scalingExecutor.scheduleAtFixedRate(this::checkScaling, 0, 300, TimeUnit.SECONDS);
     }
     
     // Method to check if scaling is needed
