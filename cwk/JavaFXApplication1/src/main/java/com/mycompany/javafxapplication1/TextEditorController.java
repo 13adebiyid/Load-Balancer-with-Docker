@@ -97,7 +97,7 @@ public class TextEditorController {
     }
     
     @FXML
-    private void handleSave() {
+    public void handleSave() {
         if (!hasWriteAccess) {
             showError("Access Denied", "You don't have write permission for this file");
             return;
@@ -111,10 +111,18 @@ public class TextEditorController {
             // Update file size in metadata
             currentFile.setTotalSize(tempFile.length());
             
-            // Remove old encryption keys
+            // Create FileChunker instance for the new content
+            FileChunker chunker = new FileChunker();
+            int chunkSize = chunker.getOptimalChunkSize(tempFile.length());
+            List<FileChunker.ChunkInfo> chunks = chunker.splitFile(tempFile, chunkSize);
+            
+            // Update total chunks in metadata
+            currentFile.setTotalChunks(chunks.size());
+            
+            // Remove old encryption keys first
             database.deleteEncryptionKeys(currentFile.getFileId());
             
-            // Upload the new file chunks
+            // Upload the file - this will handle chunk uploading and key storage
             fileOps.uploadFileInChunks(tempFile, currentFile.getFileId());
             
             // Save the updated metadata
@@ -122,6 +130,9 @@ public class TextEditorController {
             
             statusLabel.setText("File saved successfully");
             saveButton.setDisable(true);
+            
+            // Clean up temporary file
+            tempFile.delete();
             
         } catch (Exception e) {
             showError("Save Failed", e.getMessage());

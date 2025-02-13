@@ -545,7 +545,7 @@ public class DB {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
-            connection.setAutoCommit(false);  
+            connection.setAutoCommit(false);
             
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
@@ -672,26 +672,41 @@ public class DB {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
+            connection.setAutoCommit(false);
+            
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            statement.executeUpdate("DELETE FROM encryption_keys WHERE file_id = '" + fileId + "'");
-            
-            System.out.println("Deleted old encryption keys for file: " + fileId);
+            try {
+                // Use prepared statement for safety
+                String sql = "DELETE FROM encryption_keys WHERE file_id = ?";
+                PreparedStatement pstmt = connection.prepareStatement(sql);
+                pstmt.setString(1, fileId);
+                pstmt.executeUpdate();
+                
+                connection.commit();
+                System.out.println("Deleted all encryption keys for file " + fileId);
+                
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            }
             
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to delete encryption keys", ex);
         } finally {
             try {
                 if (connection != null) {
+                    connection.setAutoCommit(true);
                     connection.close();
                 }
             } catch (SQLException e) {
-                System.err.println(e.getMessage());
+                System.err.println("Error closing connection: " + e.getMessage());
             }
         }
     }
-
+    
     
     /**
      * Sets or updates permissions for a user on a file
@@ -822,34 +837,43 @@ public class DB {
         return accessList;
     }
     
-    public void storeEncryptionKey(String fileId, int chunkNumber, String keyString)
-            throws ClassNotFoundException {
+    public void storeEncryptionKey(String fileId, int chunkNumber, String keyString) throws ClassNotFoundException {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
+            connection.setAutoCommit(false);  // Start transaction
+            
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            statement.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS encryption_keys (" +
-                            "file_id TEXT, chunk_number INTEGER, key_string TEXT, " +
-                            "PRIMARY KEY (file_id, chunk_number))"
-            );
-            
-            statement.executeUpdate(
-                    "INSERT OR REPLACE INTO encryption_keys (file_id, chunk_number, key_string) " +
-                            "VALUES ('" + fileId + "', " + chunkNumber + ", '" + keyString + "')"
-            );
+            try {
+                // Use prepared statement to prevent SQL injection
+                String sql = "INSERT OR REPLACE INTO encryption_keys (file_id, chunk_number, key_string) VALUES (?, ?, ?)";
+                PreparedStatement pstmt = connection.prepareStatement(sql);
+                pstmt.setString(1, fileId);
+                pstmt.setInt(2, chunkNumber);
+                pstmt.setString(3, keyString);
+                pstmt.executeUpdate();
+                
+                connection.commit();
+                System.out.println("Stored encryption key for file " + fileId + ", chunk " + chunkNumber);
+                
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            }
             
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to store encryption key", ex);
         } finally {
             try {
                 if (connection != null) {
+                    connection.setAutoCommit(true);
                     connection.close();
                 }
             } catch (SQLException e) {
-                System.err.println(e.getMessage());
+                System.err.println("Error closing connection: " + e.getMessage());
             }
         }
     }
@@ -861,28 +885,30 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            ResultSet rs = statement.executeQuery(
-                    "SELECT key_string FROM encryption_keys " +
-                            "WHERE file_id = '" + fileId + "' AND chunk_number = " + chunkNumber
-            );
+            String sql = "SELECT key_string FROM encryption_keys WHERE file_id = ? AND chunk_number = ?";
+            PreparedStatement pstmt = connection.prepareStatement(sql);
+            pstmt.setString(1, fileId);
+            pstmt.setInt(2, chunkNumber);
             
+            ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
                 return rs.getString("key_string");
             }
             
+            return null;
+            
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
         } finally {
             try {
                 if (connection != null) {
                     connection.close();
                 }
             } catch (SQLException e) {
-                System.err.println(e.getMessage());
+                System.err.println("Error closing connection: " + e.getMessage());
             }
         }
-        
-        return null;
     }
     
     private String getMySQLUrl() {
@@ -904,9 +930,9 @@ public class DB {
     }
     
     /*
-     * Updates a user's details including username and role
-     * Only available to admin users
-     */
+    * Updates a user's details including username and role
+    * Only available to admin users
+    */
     public void updateUser(String oldUsername, String newUsername, String newRole) throws ClassNotFoundException {
         Connection conn = null;
         PreparedStatement stmt = null;
@@ -973,9 +999,9 @@ public class DB {
     }
     
     /*
-     * Resets a user's password
-     * Only available to admin users
-     */
+    * Resets a user's password
+    * Only available to admin users
+    */
     public void resetPassword(String username, String newPassword) throws ClassNotFoundException {
         Connection conn = null;
         PreparedStatement stmt = null;
@@ -1035,10 +1061,10 @@ public class DB {
     }
     
     /*
-     * Deletes a user and all their associated data
-     * Cannot delete admin users
-     * Only available to admin users
-     */
+    * Deletes a user and all their associated data
+    * Cannot delete admin users
+    * Only available to admin users
+    */
     public void deleteUser(String username) throws ClassNotFoundException {
         Connection conn = null;
         PreparedStatement stmt = null;
@@ -1118,8 +1144,8 @@ public class DB {
     }
     
     /*
-     * Deletes all files owned by a user
-     */
+    * Deletes all files owned by a user
+    */
     private void deleteUserFiles(Connection conn, String username) throws SQLException {
         // Get all file IDs owned by the user
         PreparedStatement fileStmt = conn.prepareStatement(
@@ -1163,8 +1189,8 @@ public class DB {
     }
     
     /*
-     * Updates all related records when a username changes
-     */
+    * Updates all related records when a username changes
+    */
     private void updateRelatedRecords(Connection conn, String oldUsername, String newUsername) throws SQLException {
         // Update file ownership
         PreparedStatement fileStmt = conn.prepareStatement(

@@ -641,7 +641,6 @@ public class FileOperationsController {
      * Uploads a file in chunks using the load balancer
      */
     public void uploadFileInChunks(File file, String fileId) throws IOException {
-        
         FileLockManager lockManager = FileLockManager.getInstance();
         
         // attempt to acquire lock for upload
@@ -649,95 +648,87 @@ public class FileOperationsController {
             throw new IOException("File is locked by another operation. Please try again later.");
         }
         
-        System.out.println("\nDebug: Starting upload process");
-        System.out.println("File: " + file.getName());
-        System.out.println("File ID: " + fileId);
-        
-        FileChunker chunker = new FileChunker();
-        int chunkSize = chunker.getOptimalChunkSize(file.length());
-        System.out.println("Optimal chunk size: " + chunkSize + " bytes");
-        
-        List<FileChunker.ChunkInfo> chunks = chunker.splitFile(file, chunkSize);
-        System.out.println("Total chunks created: " + chunks.size());
-        
-        // Create metadata at start of upload
-        FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, file.length());
-        metadata.setTotalChunks(chunks.size());
-        
-        long totalSize = file.length();
-        long bytesProcessed = 0;
-        
-        // First, process all chunks without delay
-        for (FileChunker.ChunkInfo chunk : chunks) {
-            System.out.println("\nProcessing chunk " + chunk.getNumber());
-            if (operationCancelled) {
-                System.out.println("Upload cancelled by user");
-                break;
-            }
+        try {
+            System.out.println("\nDebug: Starting upload process");
+            System.out.println("File: " + file.getName());
+            System.out.println("File ID: " + fileId);
             
-            String containerId = null;
-            try {
-                // Update progress for chunk processing
-                final long finalBytesProcessed = bytesProcessed;
-                Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize * 0.5)); // First 50% is chunk processing
-                
-                containerId = loadBalancerClient.uploadFileChunk(fileId, chunk.getNumber(), chunk.getData());
-                
-                FileEncryption encryption = new FileEncryption();
-                String encryptionKey = encryption.getKeyAsString();
-                database.storeEncryptionKey(fileId, chunk.getNumber(), encryptionKey);
-                System.out.println("Updated encryption key for chunk " + chunk.getNumber());
-                
-            } catch (ClassNotFoundException ex) {
-                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
-                throw new IOException("Upload failed", ex);
-            }
+            FileChunker chunker = new FileChunker();
+            int chunkSize = chunker.getOptimalChunkSize(file.length());
+            System.out.println("Optimal chunk size: " + chunkSize + " bytes");
             
-            if (containerId != null) {
-                System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);
-                metadata.addChunkLocation(chunk.getNumber(), containerId);
+            List<FileChunker.ChunkInfo> chunks = chunker.splitFile(file, chunkSize);
+            System.out.println("Total chunks created: " + chunks.size());
+            
+            // Create metadata at start of upload
+            FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, file.length());
+            metadata.setTotalChunks(chunks.size());
+            
+            long totalSize = file.length();
+            long bytesProcessed = 0;
+            
+            // First, process all chunks without delay
+            for (FileChunker.ChunkInfo chunk : chunks) {
+                System.out.println("\nProcessing chunk " + chunk.getNumber());
+                if (operationCancelled) {
+                    System.out.println("Upload cancelled by user");
+                    break;
+                }
                 
                 try {
-                    database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
-                    System.out.println("Encryption key stored for chunk " + chunk.getNumber());
+                    // Update progress for chunk processing
+                    final long finalBytesProcessed = bytesProcessed;
+                    Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize * 0.5));
+                    
+                    // Upload the encrypted chunk data
+                    String containerId = loadBalancerClient.uploadFileChunk(fileId, chunk.getNumber(), chunk.getData());
+                    
+                    if (containerId != null) {
+                        System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);
+                        metadata.addChunkLocation(chunk.getNumber(), containerId);
+                        
+                        // Store the encryption key that was used to encrypt this chunk
+                        database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
+                        System.out.println("Encryption key stored for chunk " + chunk.getNumber());
+                        
+                        bytesProcessed += chunk.getSize();
+                    }
                 } catch (ClassNotFoundException ex) {
                     Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                    throw new IOException("Upload failed", ex);
                 }
-                
-                bytesProcessed += chunk.getSize();
             }
-        }
-        
-        // After all chunks are processed, simulate network delay based on file size
-        if (!operationCancelled) {
-            try {
-                // Determine traffic level based on file size
-                if (totalSize > 10 * 1024 * 1024) { // 10MB
-                    NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
-                } else if (totalSize > 5 * 1024 * 1024) { // 5MB
-                    NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
-                } else {
-                    NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
+            
+            // After all chunks are processed, simulate network delay based on file size
+            if (!operationCancelled) {
+                try {
+                    // Determine traffic level based on file size
+                    if (totalSize > 10 * 1024 * 1024) { // 10MB
+                        NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
+                    } else if (totalSize > 5 * 1024 * 1024) { // 5MB
+                        NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
+                    } else {
+                        NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
+                    }
+                    
+                    // Simulate network delay for the entire file
+                    System.out.println("Simulating network delay for complete file transfer...");
+                    NetworkSimulator.simulateNetworkDelayWithProgress(
+                            "Completing file transfer",
+                            progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5))
+                    );
+                    
+                    // Save metadata after successful transfer
+                    database.saveFileMetadata(metadata);
+                    System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
+                    
+                } catch (InterruptedException | ClassNotFoundException ex) {
+                    Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
+                    throw new IOException("Upload failed during network simulation", ex);
                 }
-                
-                // Simulate network delay for the entire file
-                System.out.println("Simulating network delay for complete file transfer...");
-                NetworkSimulator.simulateNetworkDelayWithProgress(
-                        "Completing file transfer",
-                        progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5)) // Last 50% is network delay
-                );
-                
-                // Save metadata after successful transfer
-                database.saveFileMetadata(metadata);
-                System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
-                
-            } catch (InterruptedException | ClassNotFoundException ex) {
-                Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
-                throw new IOException("Upload failed during network simulation", ex);
-            }finally{
-                lockManager.unlockFile(fileId, currentUser);
-                
             }
+        } finally {
+            lockManager.unlockFile(fileId, currentUser);
         }
     }
     
@@ -768,23 +759,21 @@ public class FileOperationsController {
         FileLockManager lockManager = FileLockManager.getInstance();
         
         try {
-            // Attempt to acquire lock for download
             if (!lockManager.lockFile(fileId, "DOWNLOAD", currentUser)) {
                 throw new IOException("File is locked by another operation. Please try again later.");
             }
             
             System.out.println("Starting download for file ID: " + fileId + "...");
             
-            // Get file metadata
             FileMetadata metadata = database.getFileMetadata(fileId);
             if (metadata == null) {
                 throw new IOException("File metadata not found");
             }
             
-            // Determine traffic level based on file size
-            if (metadata.getTotalSize() > 10 * 1024 * 1024) { // > 10MB
+            // Set traffic level based on file size
+            if (metadata.getTotalSize() > 10 * 1024 * 1024) {
                 NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
-            } else if (metadata.getTotalSize() > 5 * 1024 * 1024) { // > 5MB
+            } else if (metadata.getTotalSize() > 5 * 1024 * 1024) {
                 NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.MEDIUM);
             } else {
                 NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
@@ -793,7 +782,7 @@ public class FileOperationsController {
             List<FileChunker.ChunkInfo> chunks = new ArrayList<>();
             long bytesProcessed = 0;
             
-            // Create MessageDigest for checksum verification
+            // Initialize checksum
             MessageDigest md;
             try {
                 md = MessageDigest.getInstance("SHA-256");
@@ -808,28 +797,23 @@ public class FileOperationsController {
                 System.out.println("Requesting chunk " + chunkNumber + " from load balancer...");
                 
                 try {
-                    // Get encrypted chunk data
+                    // Download encrypted chunk
                     byte[] encryptedData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
                     System.out.println("Received chunk " + chunkNumber + ", size: " + encryptedData.length);
                     
-                    // Verify chunk integrity with checksum
+                    // Calculate checksum of encrypted data
                     md.reset();
                     md.update(encryptedData);
                     String checksum = Base64.getEncoder().encodeToString(md.digest());
                     
-                    // Get encryption key for this chunk
+                    // Get encryption key
                     String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
-                    System.out.println("Decryption - Using encryption key for chunk " + chunkNumber + ": " + encryptionKey);
-                    if (encryptionKey == null) {
-                        throw new IOException("Error: Encryption key is missing for chunk " + chunkNumber);
-                    }
                     if (encryptionKey == null) {
                         throw new IOException("Missing encryption key for chunk " + chunkNumber);
                     }
+                    System.out.println("Retrieved encryption key for chunk " + chunkNumber);
                     
-                    FileEncryption chunkEncryption = FileEncryption.fromKey(encryptionKey); 
-                    
-                    // Create chunk info object
+                    // Create chunk info
                     FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
                             chunkNumber,
                             encryptedData.length,
@@ -841,7 +825,7 @@ public class FileOperationsController {
                     chunks.add(chunk);
                     bytesProcessed += encryptedData.length;
                     
-                    // Update progress for chunk download (0-50% range)
+                    // Update progress (0-50% range)
                     final double progress = (double) bytesProcessed / metadata.getTotalSize() * 0.5;
                     Platform.runLater(() -> updateProgress(progress));
                     
@@ -850,14 +834,16 @@ public class FileOperationsController {
                 }
             }
             
-            // Second phase (50-100%): Simulate network delay and reassemble file
+            // Second phase (50-100%): Network delay simulation and file assembly
             if (!operationCancelled) {
                 try {
-                    // Simulate network delay with progress updates
                     System.out.println("Simulating network delay for file assembly...");
-                    NetworkSimulator.simulateNetworkDelayWithProgress("Assembling file chunks", progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5)));
+                    NetworkSimulator.simulateNetworkDelayWithProgress(
+                            "Assembling file chunks",
+                            progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5))
+                    );
                     
-                    // Reassemble the file from chunks
+                    // Reassemble file using chunks
                     FileChunker chunker = new FileChunker();
                     chunker.reassembleFile(chunks, outputFile);
                     
