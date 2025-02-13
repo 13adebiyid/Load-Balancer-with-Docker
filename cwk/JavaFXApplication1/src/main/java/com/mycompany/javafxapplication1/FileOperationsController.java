@@ -683,6 +683,11 @@ public class FileOperationsController {
                 
                 containerId = loadBalancerClient.uploadFileChunk(fileId, chunk.getNumber(), chunk.getData());
                 
+                FileEncryption encryption = new FileEncryption();
+                String encryptionKey = encryption.getKeyAsString();
+                database.storeEncryptionKey(fileId, chunk.getNumber(), encryptionKey);
+                System.out.println("Updated encryption key for chunk " + chunk.getNumber());
+                
             } catch (ClassNotFoundException ex) {
                 Logger.getLogger(FileOperationsController.class.getName()).log(Level.SEVERE, null, ex);
                 throw new IOException("Upload failed", ex);
@@ -814,9 +819,15 @@ public class FileOperationsController {
                     
                     // Get encryption key for this chunk
                     String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
+                    System.out.println("Decryption - Using encryption key for chunk " + chunkNumber + ": " + encryptionKey);
+                    if (encryptionKey == null) {
+                        throw new IOException("Error: Encryption key is missing for chunk " + chunkNumber);
+                    }
                     if (encryptionKey == null) {
                         throw new IOException("Missing encryption key for chunk " + chunkNumber);
                     }
+                    
+                    FileEncryption chunkEncryption = FileEncryption.fromKey(encryptionKey); 
                     
                     // Create chunk info object
                     FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
@@ -844,10 +855,7 @@ public class FileOperationsController {
                 try {
                     // Simulate network delay with progress updates
                     System.out.println("Simulating network delay for file assembly...");
-                    NetworkSimulator.simulateNetworkDelayWithProgress(
-                            "Assembling file chunks",
-                            progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5))
-                    );
+                    NetworkSimulator.simulateNetworkDelayWithProgress("Assembling file chunks", progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5)));
                     
                     // Reassemble the file from chunks
                     FileChunker chunker = new FileChunker();
@@ -861,7 +869,6 @@ public class FileOperationsController {
             }
             
         } finally {
-            // Always release the lock, even if an error occurred
             lockManager.unlockFile(fileId, currentUser);
             System.out.println("Released lock for file: " + fileId);
         }

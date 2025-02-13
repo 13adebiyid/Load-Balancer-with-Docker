@@ -104,29 +104,24 @@ public class TextEditorController {
         }
         
         try {
-            // Create temporary file with current content
+            // Create a temporary file with the new content
             File tempFile = File.createTempFile("save_", ".tmp");
-            try {
-                Files.write(tempFile.toPath(), contentArea.getText().getBytes());
-                
-                // Update the file size in metadata
-                currentFile.setTotalSize(tempFile.length());
-                
-                // Upload the content
-                fileOps.uploadFileInChunks(tempFile, currentFile.getFileId());
-                
-                // Save metadata only for new files
-                if (isNewFile) {
-                    database.saveFileMetadata(currentFile);
-                }
-                
-                statusLabel.setText("File saved successfully");
-                saveButton.setDisable(true);
-                isNewFile = false;  // File is no longer new after saving
-                
-            } finally {
-                tempFile.delete();
-            }
+            Files.write(tempFile.toPath(), contentArea.getText().getBytes());
+            
+            // Update file size in metadata
+            currentFile.setTotalSize(tempFile.length());
+            
+            // Remove old encryption keys
+            database.deleteEncryptionKeys(currentFile.getFileId());
+            
+            // Upload the new file chunks
+            fileOps.uploadFileInChunks(tempFile, currentFile.getFileId());
+            
+            // Save the updated metadata
+            database.saveFileMetadata(currentFile);
+            
+            statusLabel.setText("File saved successfully");
+            saveButton.setDisable(true);
             
         } catch (Exception e) {
             showError("Save Failed", e.getMessage());

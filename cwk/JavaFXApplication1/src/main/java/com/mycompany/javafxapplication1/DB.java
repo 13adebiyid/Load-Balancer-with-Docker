@@ -545,23 +545,27 @@ public class DB {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
-            connection.setAutoCommit(false);  // Start transaction
+            connection.setAutoCommit(false);  
             
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
             try {
-                // Escape special characters in the file name and other strings
                 String escapedFileName = metadata.getFileName().replace("'", "''");
                 String escapedFileId = metadata.getFileId().replace("'", "''");
                 String escapedOwnerUser = metadata.getOwnerUser().replace("'", "''");
                 
-                // Add file metadata using prepared statement to prevent SQL injection
-                String insertFileSql = "INSERT INTO files " +
-                        "(file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
-                        "VALUES (?, ?, ?, ?, ?, ?)";
+                // prepared statement to prevent SQL injection
+                String upsertQuery = "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
+                        "VALUES (?, ?, ?, ?, ?, ?) " +
+                        "ON CONFLICT(file_id) DO UPDATE SET " +
+                        "file_name = excluded.file_name, " +
+                        "owner_user = excluded.owner_user, " +
+                        "total_size = excluded.total_size, " +
+                        "total_chunks = excluded.total_chunks, " +
+                        "is_shared = excluded.is_shared";
                 
-                try (PreparedStatement pstmt = connection.prepareStatement(insertFileSql)) {
+                try (PreparedStatement pstmt = connection.prepareStatement(upsertQuery)) {
                     pstmt.setString(1, metadata.getFileId());
                     pstmt.setString(2, metadata.getFileName());
                     pstmt.setString(3, metadata.getOwnerUser());
@@ -571,8 +575,9 @@ public class DB {
                     pstmt.executeUpdate();
                 }
                 
-                // Add chunk locations using prepared statement
-                String insertChunkSql = "INSERT INTO file_chunks (file_id, chunk_number, container_id) VALUES (?, ?, ?)";
+                String insertChunkSql = "INSERT INTO file_chunks (file_id, chunk_number, container_id) VALUES (?, ?, ?) " +
+                        "ON CONFLICT(file_id, chunk_number) DO UPDATE SET container_id = excluded.container_id";
+                
                 try (PreparedStatement chunkStmt = connection.prepareStatement(insertChunkSql)) {
                     for (int i = 0; i < metadata.getTotalChunks(); i++) {
                         String containerId = metadata.getContainerForChunk(i);
@@ -662,6 +667,31 @@ public class DB {
         
         return null;
     }
+    
+    public void deleteEncryptionKeys(String fileId) throws ClassNotFoundException {
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection(fileName);
+            var statement = connection.createStatement();
+            statement.setQueryTimeout(timeout);
+            
+            statement.executeUpdate("DELETE FROM encryption_keys WHERE file_id = '" + fileId + "'");
+            
+            System.out.println("Deleted old encryption keys for file: " + fileId);
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            try {
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+    }
+
     
     /**
      * Sets or updates permissions for a user on a file
