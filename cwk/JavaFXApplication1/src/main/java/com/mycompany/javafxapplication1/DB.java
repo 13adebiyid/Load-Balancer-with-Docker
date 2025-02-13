@@ -116,14 +116,14 @@ public class DB {
             }
             
             statement.executeUpdate(
-                "CREATE TABLE IF NOT EXISTS sessions (" +
-                    "session_id TEXT PRIMARY KEY," +
-                    "user_name TEXT NOT NULL," +
-                    "login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                    "last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                    "expires_at TIMESTAMP," +
-                    "FOREIGN KEY (user_name) REFERENCES " + dataBaseTableName + "(name)" +
-                ")"
+                    "CREATE TABLE IF NOT EXISTS sessions (" +
+                            "session_id TEXT PRIMARY KEY," +
+                            "user_name TEXT NOT NULL," +
+                            "login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                            "expires_at TIMESTAMP," +
+                            "FOREIGN KEY (user_name) REFERENCES " + dataBaseTableName + "(name)" +
+                                    ")"
             );
             
             statement.executeUpdate(
@@ -873,6 +873,294 @@ public class DB {
         }
     }
     
+    /*
+     * Updates a user's details including username and role
+     * Only available to admin users
+     */
+    public void updateUser(String oldUsername, String newUsername, String newRole) throws ClassNotFoundException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        
+        try {
+            Class.forName("org.sqlite.JDBC");
+            conn = DriverManager.getConnection(fileName);
+            conn.setAutoCommit(false);
+            
+            // First check if new username already exists (if changing username)
+            if (!oldUsername.equals(newUsername)) {
+                PreparedStatement checkStmt = conn.prepareStatement(
+                        "SELECT COUNT(*) FROM " + dataBaseTableName + " WHERE name = ?"
+                );
+                checkStmt.setString(1, newUsername);
+                ResultSet rs = checkStmt.executeQuery();
+                if (rs.next() && rs.getInt(1) > 0) {
+                    throw new SQLException("Username " + newUsername + " already exists");
+                }
+            }
+            
+            // Update user details
+            stmt = conn.prepareStatement(
+                    "UPDATE " + dataBaseTableName +
+                            " SET name = ?, role = ? WHERE name = ?"
+            );
+            
+            stmt.setString(1, newUsername);
+            stmt.setString(2, newRole);
+            stmt.setString(3, oldUsername);
+            
+            int updated = stmt.executeUpdate();
+            if (updated == 0) {
+                throw new SQLException("User not found: " + oldUsername);
+            }
+            
+            // Update related records in other tables
+            updateRelatedRecords(conn, oldUsername, newUsername);
+            
+            conn.commit();
+            System.out.println("Successfully updated user: " + oldUsername + " to " + newUsername);
+            
+        } catch (SQLException ex) {
+            try {
+                if (conn != null) {
+                    conn.rollback();
+                }
+            } catch (SQLException e) {
+                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, "Error rolling back", e);
+            }
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to update user: " + ex.getMessage(), ex);
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, "Error closing connection", e);
+            }
+        }
+    }
+    
+    /*
+     * Resets a user's password
+     * Only available to admin users
+     */
+    public void resetPassword(String username, String newPassword) throws ClassNotFoundException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        
+        try {
+            String securePass = generateSecurePassword(newPassword);
+            
+            Class.forName("org.sqlite.JDBC");
+            conn = DriverManager.getConnection(fileName);
+            conn.setAutoCommit(false);
+            
+            // Verify user exists
+            PreparedStatement checkStmt = conn.prepareStatement(
+                    "SELECT COUNT(*) FROM " + dataBaseTableName + " WHERE name = ?"
+            );
+            checkStmt.setString(1, username);
+            ResultSet rs = checkStmt.executeQuery();
+            if (rs.next() && rs.getInt(1) == 0) {
+                throw new SQLException("User not found: " + username);
+            }
+            
+            // Update password
+            stmt = conn.prepareStatement(
+                    "UPDATE " + dataBaseTableName +
+                            " SET password = ? WHERE name = ?"
+            );
+            
+            stmt.setString(1, securePass);
+            stmt.setString(2, username);
+            
+            stmt.executeUpdate();
+            conn.commit();
+            
+            System.out.println("Successfully reset password for user: " + username);
+            
+        } catch (SQLException | InvalidKeySpecException ex) {
+            try {
+                if (conn != null) {
+                    conn.rollback();
+                }
+            } catch (SQLException e) {
+                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, "Error rolling back", e);
+            }
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to reset password: " + ex.getMessage(), ex);
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, "Error closing connection", e);
+            }
+        }
+    }
+    
+    /*
+     * Deletes a user and all their associated data
+     * Cannot delete admin users
+     * Only available to admin users
+     */
+    public void deleteUser(String username) throws ClassNotFoundException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        
+        try {
+            Class.forName("org.sqlite.JDBC");
+            conn = DriverManager.getConnection(fileName);
+            conn.setAutoCommit(false);
+            
+            // First check if user exists and is not an admin
+            PreparedStatement checkStmt = conn.prepareStatement(
+                    "SELECT role FROM " + dataBaseTableName + " WHERE name = ?"
+            );
+            checkStmt.setString(1, username);
+            ResultSet rs = checkStmt.executeQuery();
+            
+            if (!rs.next()) {
+                throw new SQLException("User not found: " + username);
+            }
+            
+            if ("ADMIN".equals(rs.getString("role"))) {
+                throw new SQLException("Cannot delete admin users");
+            }
+            
+            // Delete user's files first
+            deleteUserFiles(conn, username);
+            
+            // Delete user's permissions
+            PreparedStatement permStmt = conn.prepareStatement(
+                    "DELETE FROM file_permissions WHERE user_name = ?"
+            );
+            permStmt.setString(1, username);
+            permStmt.executeUpdate();
+            
+            // Delete user's sessions
+            PreparedStatement sessionStmt = conn.prepareStatement(
+                    "DELETE FROM sessions WHERE user_name = ?"
+            );
+            sessionStmt.setString(1, username);
+            sessionStmt.executeUpdate();
+            
+            // Finally, delete the user
+            stmt = conn.prepareStatement(
+                    "DELETE FROM " + dataBaseTableName + " WHERE name = ?"
+            );
+            stmt.setString(1, username);
+            int deleted = stmt.executeUpdate();
+            
+            if (deleted == 0) {
+                throw new SQLException("Failed to delete user: " + username);
+            }
+            
+            conn.commit();
+            System.out.println("Successfully deleted user: " + username);
+            
+        } catch (SQLException ex) {
+            try {
+                if (conn != null) {
+                    conn.rollback();
+                }
+            } catch (SQLException e) {
+                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, "Error rolling back", e);
+            }
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            throw new RuntimeException("Failed to delete user: " + ex.getMessage(), ex);
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, "Error closing connection", e);
+            }
+        }
+    }
+    
+    /*
+     * Deletes all files owned by a user
+     */
+    private void deleteUserFiles(Connection conn, String username) throws SQLException {
+        // Get all file IDs owned by the user
+        PreparedStatement fileStmt = conn.prepareStatement(
+                "SELECT file_id FROM files WHERE owner_user = ?"
+        );
+        fileStmt.setString(1, username);
+        ResultSet rs = fileStmt.executeQuery();
+        
+        // Delete each file's related records
+        while (rs.next()) {
+            String fileId = rs.getString("file_id");
+            
+            // Delete file chunks
+            PreparedStatement chunkStmt = conn.prepareStatement(
+                    "DELETE FROM file_chunks WHERE file_id = ?"
+            );
+            chunkStmt.setString(1, fileId);
+            chunkStmt.executeUpdate();
+            
+            // Delete encryption keys
+            PreparedStatement keyStmt = conn.prepareStatement(
+                    "DELETE FROM encryption_keys WHERE file_id = ?"
+            );
+            keyStmt.setString(1, fileId);
+            keyStmt.executeUpdate();
+            
+            // Delete permissions
+            PreparedStatement permStmt = conn.prepareStatement(
+                    "DELETE FROM file_permissions WHERE file_id = ?"
+            );
+            permStmt.setString(1, fileId);
+            permStmt.executeUpdate();
+        }
+        
+        // Delete the files themselves
+        PreparedStatement deleteFilesStmt = conn.prepareStatement(
+                "DELETE FROM files WHERE owner_user = ?"
+        );
+        deleteFilesStmt.setString(1, username);
+        deleteFilesStmt.executeUpdate();
+    }
+    
+    /*
+     * Updates all related records when a username changes
+     */
+    private void updateRelatedRecords(Connection conn, String oldUsername, String newUsername) throws SQLException {
+        // Update file ownership
+        PreparedStatement fileStmt = conn.prepareStatement(
+                "UPDATE files SET owner_user = ? WHERE owner_user = ?"
+        );
+        fileStmt.setString(1, newUsername);
+        fileStmt.setString(2, oldUsername);
+        fileStmt.executeUpdate();
+        
+        // Update file permissions
+        PreparedStatement permStmt = conn.prepareStatement(
+                "UPDATE file_permissions SET user_name = ? WHERE user_name = ?"
+        );
+        permStmt.setString(1, newUsername);
+        permStmt.setString(2, oldUsername);
+        permStmt.executeUpdate();
+        
+        // Update session records
+        PreparedStatement sessionStmt = conn.prepareStatement(
+                "UPDATE sessions SET user_name = ? WHERE user_name = ?"
+        );
+        sessionStmt.setString(1, newUsername);
+        sessionStmt.setString(2, oldUsername);
+        sessionStmt.executeUpdate();
+    }
+    
     public String getUserRole(String username) throws ClassNotFoundException {
         try {
             Class.forName("org.sqlite.JDBC");
@@ -907,9 +1195,9 @@ public class DB {
             
             String sessionId = UUID.randomUUID().toString();
             statement.executeUpdate(
-                "INSERT INTO sessions (session_id, user_name, expires_at) " +
-                "VALUES ('" + sessionId + "', '" + userName + "', " +
-                "datetime('now', '+24 hours'))"
+                    "INSERT INTO sessions (session_id, user_name, expires_at) " +
+                            "VALUES ('" + sessionId + "', '" + userName + "', " +
+                                    "datetime('now', '+24 hours'))"
             );
             
         } finally {
