@@ -64,6 +64,27 @@ public class LoadBalancer {
         startScalingMonitor();
     }
     
+    private void installDocker() {
+        try {
+            System.out.println("Checking if Docker is installed inside the container...");
+            Process checkDocker = Runtime.getRuntime().exec("docker --version");
+            int exitCode = checkDocker.waitFor();
+            
+            if (exitCode == 0) {
+                System.out.println("Docker is already installed.");
+                return;
+            }
+            
+            System.out.println("Installing Docker inside the container...");
+            Process installProcess = Runtime.getRuntime().exec("apk add --no-cache docker docker-compose");
+            installProcess.waitFor();
+            
+            System.out.println("Docker installation complete.");
+        } catch (Exception e) {
+            System.err.println("Failed to install Docker: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
     
     private void startScalingMonitor() {
         ScheduledExecutorService scalingExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -91,6 +112,7 @@ public class LoadBalancer {
         }
         
         if (needsScaling) {
+            installDocker();
             dockerManager.scaleContainers(targetContainers);
             // Wait for containers to be ready
             try {

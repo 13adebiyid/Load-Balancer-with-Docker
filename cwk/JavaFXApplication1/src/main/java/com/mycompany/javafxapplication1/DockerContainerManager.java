@@ -1,26 +1,20 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package com.mycompany.javafxapplication1;
 
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- *
- * @author ntu-user
- */
 public class DockerContainerManager {
     private static final String DOCKER_COMPOSE_FILE = "docker-compose.yml";
     private static final int MIN_CONTAINERS = 4;
     private static final int MAX_CONTAINERS = 10;
-    private static final String STORAGE_SERVICE_NAME = "file_storage";
+    private static final String STORAGE_SERVICE_NAME = "comp20081-files-container";
+    
+    
+    
     
     public void scaleContainers(int targetCount) {
         try {
-            // Ensure target count is within bounds
             targetCount = Math.min(Math.max(targetCount, MIN_CONTAINERS), MAX_CONTAINERS);
             
             String[] command = {
@@ -32,19 +26,13 @@ public class DockerContainerManager {
             };
             
             Process process = Runtime.getRuntime().exec(command);
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    System.out.println("Docker: " + line);
-                }
-            }
+            process.waitFor();
             
-            int exitCode = process.waitFor();
-            if (exitCode == 0) {
+            if (process.exitValue() == 0) {
                 System.out.println("Successfully scaled containers to: " + targetCount);
+                waitForContainers(targetCount);
             } else {
-                System.err.println("Failed to scale containers. Exit code: " + exitCode);
+                System.err.println("Failed to scale containers. Exit code: " + process.exitValue());
             }
             
         } catch (Exception e) {
@@ -53,22 +41,35 @@ public class DockerContainerManager {
         }
     }
     
+    private void waitForContainers(int expectedCount) throws InterruptedException, IOException {
+        int attempts = 10;
+        while (attempts-- > 0) {
+            int runningContainers = getCurrentContainerCount();
+            if (runningContainers >= expectedCount) {
+                System.out.println("All storage containers are up and running.");
+                return;
+            }
+            System.out.println("Waiting for containers to start... (" + runningContainers + "/" + expectedCount + ")");
+            Thread.sleep(5000);
+        }
+        System.err.println("Timeout waiting for containers to start.");
+    }
+    
     public int getCurrentContainerCount() {
         try {
             Process process = Runtime.getRuntime().exec(
-                "docker-compose -f " + DOCKER_COMPOSE_FILE + " ps -q " + STORAGE_SERVICE_NAME
-            );
+                    "docker ps --filter 'name=" + STORAGE_SERVICE_NAME + "' --format '{{.Names}}'");
             
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
-                List<String> containerIds = new ArrayList<>();
+                List<String> containerNames = new ArrayList<>();
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (!line.trim().isEmpty()) {
-                        containerIds.add(line.trim());
+                        containerNames.add(line.trim());
                     }
                 }
-                return containerIds.size();
+                return containerNames.size();
             }
         } catch (Exception e) {
             System.err.println("Error getting container count: " + e.getMessage());
