@@ -67,6 +67,20 @@ public class FileOperationsController {
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
     }
     
+    public void initializeDatabase() throws ClassNotFoundException {
+        database = new DB();
+        database.initializeDatabase();
+    }
+    
+    public void initializeComponents() throws ClassNotFoundException {
+        database = new DB();
+        database.initializeDatabase();
+        
+        loadBalancerClient = new LoadBalancerClient("localhost", 8080);
+        
+        FileLockManager lockManager = FileLockManager.getInstance();
+    }
+    
     //REMOVEEEEEEEEEEE
     
     @FXML
@@ -202,7 +216,7 @@ public class FileOperationsController {
         
         
         
-        // Add context menu for files
+        // context menu for files
         filesTable.setRowFactory(tv -> {
             TableRow<FileMetadata> row = new TableRow<>();
             ContextMenu contextMenu = new ContextMenu();
@@ -218,7 +232,16 @@ public class FileOperationsController {
                 }
             });
             
-            // Add Share menu item
+            // Edit menu item
+            MenuItem editItem = new MenuItem("Edit");
+            editItem.setOnAction(event -> {
+                FileMetadata file = row.getItem();
+                if (file != null) {
+                    openTextEditor(file);
+                }
+            });
+            
+            // Share menu item
             MenuItem shareItem = new MenuItem("Share");
             shareItem.setOnAction(event -> {
                 FileMetadata file = row.getItem();
@@ -233,7 +256,7 @@ public class FileOperationsController {
                 }
             });
             
-            // Add Show Access menu item
+            // Show Access menu item
             MenuItem accessItem = new MenuItem("Show Access");
             accessItem.setOnAction(event -> {
                 FileMetadata file = row.getItem();
@@ -250,7 +273,7 @@ public class FileOperationsController {
                 }
             });
             
-            contextMenu.getItems().addAll(downloadItem, shareItem, accessItem, deleteItem, remoteTerminalItem);
+            contextMenu.getItems().addAll(downloadItem, shareItem, accessItem, deleteItem, remoteTerminalItem, editItem);
             
             row.contextMenuProperty().bind(
                     javafx.beans.binding.Bindings.when(row.emptyProperty())
@@ -359,6 +382,54 @@ public class FileOperationsController {
                 }
             }
         });
+    }
+    
+    private void openTextEditor(FileMetadata file) {
+        try {
+            // Check read permission first
+            if (!database.checkFilePermission(file.getFileId(), currentUser, "read")) {
+                showAlert(Alert.AlertType.ERROR, "Access Denied",
+                        "You don't have permission to view this file");
+                return;
+            }
+            
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("text_editor.fxml"));
+            Parent root = loader.load();
+            
+            TextEditorController controller = loader.getController();
+            controller.setCurrentUser(currentUser);
+            controller.loadFile(file);
+            
+            Stage editorStage = new Stage();
+            editorStage.setTitle("Edit: " + file.getFileName());
+            editorStage.setScene(new Scene(root, 800, 600));
+            editorStage.show();
+            
+        } catch (Exception e) {
+            showAlert(Alert.AlertType.ERROR, "Error",
+                    "Failed to open text editor: " + e.getMessage());
+        }
+    }
+    
+// Add a button to create new text files
+    @FXML
+    private void createNewTextFile() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("text_editor.fxml"));
+            Parent root = loader.load();
+            
+            TextEditorController controller = loader.getController();
+            controller.setCurrentUser(currentUser);
+            
+            Stage editorStage = new Stage();
+            editorStage.setTitle("New Text File");
+            editorStage.setScene(new Scene(root, 800, 600));
+            editorStage.show();
+            
+        } catch (IOException e) {
+            showAlert(Alert.AlertType.ERROR, "Error",
+                    "Failed to open text editor: " + e.getMessage());
+        }
     }
     
     @FXML
@@ -569,7 +640,7 @@ public class FileOperationsController {
     /**
      * Uploads a file in chunks using the load balancer
      */
-    private void uploadFileInChunks(File file, String fileId) throws IOException {
+    public void uploadFileInChunks(File file, String fileId) throws IOException {
         
         FileLockManager lockManager = FileLockManager.getInstance();
         
@@ -666,7 +737,7 @@ public class FileOperationsController {
     }
     
     // Helper method to show alerts on the JavaFX Application Thread
-    private void showAlert(Alert.AlertType type, String title, String message) {
+    protected void showAlert(Alert.AlertType type, String title, String message) {
         if (Platform.isFxApplicationThread()) {
             showAlertImpl(type, title, message);
         } else {
@@ -686,7 +757,7 @@ public class FileOperationsController {
     /**
      * Downloads and reassembles a file from chunks
      */
-    private void downloadAndAssembleFile(String fileId, File outputFile)
+    public void downloadAndAssembleFile(String fileId, File outputFile)
             throws IOException, ClassNotFoundException {
         
         FileLockManager lockManager = FileLockManager.getInstance();
@@ -826,7 +897,7 @@ public class FileOperationsController {
     /**
      * Updates the progress bar
      */
-    private void updateProgress(double progress) {
+    protected void updateProgress(double progress) {
         if (Platform.isFxApplicationThread()) {
             progressBar.setProgress(Math.min(1.0, Math.max(0.0, progress)));
         } else {
@@ -848,7 +919,7 @@ public class FileOperationsController {
     /**
      * Resets the progress bar
      */
-    private void clearProgress() {
+    protected void clearProgress() {
         if (Platform.isFxApplicationThread()) {
             clearProgressImpl();
         } else {

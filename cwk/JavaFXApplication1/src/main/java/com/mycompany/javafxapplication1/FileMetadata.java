@@ -67,6 +67,9 @@ public class FileMetadata implements Serializable {
     public void setTotalChunks(int totalChunks) {
         this.totalChunks = totalChunks;
     }
+    public void setTotalSize(long totalSize) {
+        this.totalSize = totalSize;
+    }
     
     // Getters and setters
     public String getFileId() { return fileId; }

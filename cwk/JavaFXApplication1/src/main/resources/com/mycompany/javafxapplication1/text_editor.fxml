@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox spacing="10" xmlns="http://javafx.com/javafx/22" xmlns:fx="http://javafx.com/fxml/1" 
+      fx:controller="com.mycompany.javafxapplication1.TextEditorController">
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+    
+    <!-- File Name and Buttons -->
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <TextField fx:id="fileNameField" promptText="File name" HBox.hgrow="ALWAYS"/>
+        <Button text="New" onAction="#handleNew"/>
+        <Button fx:id="saveButton" text="Save" onAction="#handleSave" disable="true"/>
+    </HBox>
+    
+    <!-- Text Editor Area -->
+    <TextArea fx:id="contentArea" 
+              wrapText="true" 
+              VBox.vgrow="ALWAYS"
+              style="-fx-font-family: 'monospace';">
+        <VBox.margin>
+            <Insets top="5" bottom="5"/>
+        </VBox.margin>
+    </TextArea>
+    
+    <!-- Status Bar -->
+    <HBox alignment="CENTER_LEFT">
+        <Label fx:id="statusLabel" text="Ready"/>
+    </HBox>
+</VBox>
