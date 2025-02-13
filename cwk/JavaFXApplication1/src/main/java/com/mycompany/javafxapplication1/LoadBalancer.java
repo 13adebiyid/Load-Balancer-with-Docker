@@ -25,6 +25,7 @@ public class LoadBalancer {
     private static final int MAX_CONTAINERS = 10;
     private static final double SCALE_UP_THRESHOLD = 0.8;   // 80% load triggers scale up
     private static final double SCALE_DOWN_THRESHOLD = 0.3; // 30% load triggers scale down
+    private final DockerContainerManager dockerManager;
     
     private Map<String, ContainerMetrics> containerMetrics;
     
@@ -58,6 +59,7 @@ public class LoadBalancer {
         currentAlgorithm = "RoundRobin";
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
         this.database = new DB();
+        this.dockerManager = new DockerContainerManager();
         startHealthChecks();
         startScalingMonitor();
     }
@@ -71,14 +73,57 @@ public class LoadBalancer {
     // Method to check if scaling is needed
     private void checkScaling() {
         double averageLoad = calculateAverageLoad();
-        System.out.println("Current system load: " + (averageLoad * 100) + "%");
+        System.out.println("\n=== Checking System Load ===");
+        System.out.println("Current system load: " + String.format("%.2f", averageLoad * 100) + "%");
+        System.out.println("Current container count: " + containers.size());
+        
+        int targetContainers = containers.size();
+        boolean needsScaling = false;
         
         if (averageLoad > SCALE_UP_THRESHOLD && containers.size() < MAX_CONTAINERS) {
-            scaleUp();
+            targetContainers = Math.min(containers.size() + 2, MAX_CONTAINERS);
+            System.out.println("High load detected - scaling up to " + targetContainers + " containers");
+            needsScaling = true;
         } else if (averageLoad < SCALE_DOWN_THRESHOLD && containers.size() > MIN_CONTAINERS) {
-            scaleDown();
+            targetContainers = Math.max(containers.size() - 1, MIN_CONTAINERS);
+            System.out.println("Low load detected - scaling down to " + targetContainers + " containers");
+            needsScaling = true;
+        }
+        
+        if (needsScaling) {
+            dockerManager.scaleContainers(targetContainers);
+            // Wait for containers to be ready
+            try {
+                Thread.sleep(5000); // Give containers time to start/stop
+                updateContainerList();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        System.out.println("=== Scaling Check Complete ===\n");
+    }
+    
+    private void updateContainerList() {
+        int currentCount = dockerManager.getCurrentContainerCount();
+        if (currentCount > 0) {
+            // Update container list based on actual running containers
+            List<FileStorageContainer> newContainers = new ArrayList<>();
+            for (int i = 1; i <= currentCount; i++) {
+                String containerId = "container-" + i;
+                FileStorageContainer container = new FileStorageContainer(
+                    containerId,
+                    "/storage/" + containerId
+                );
+                newContainers.add(container);
+                containerStatus.put(containerId, true);
+                containerPriorities.put(containerId, 1);
+            }
+            containers = newContainers;
+            System.out.println("Updated container list - now managing " + containers.size() + " containers");
         }
     }
+    
     //REMOVE
     public void simulateLoad(int numberOfConnections) {
         if (containers.isEmpty()) {
@@ -86,39 +131,35 @@ public class LoadBalancer {
             return;
         }
         
-        int connectionsPerContainer = numberOfConnections / containers.size();
-        
         System.out.println("\n=== Starting Load Simulation ===");
         System.out.println("Total simulated connections: " + numberOfConnections);
-        System.out.println("Connections per container: " + connectionsPerContainer);
-        System.out.println("Current number of containers: " + containers.size());
+        System.out.println("Current containers: " + containers.size());
         
-        // Update active connections for each container
+        int connectionsPerContainer = numberOfConnections / containers.size();
+        
+        // Reset all container metrics
         for (FileStorageContainer container : containers) {
-            // Initialize metrics if not exists
             containerMetrics.putIfAbsent(container.getId(), new ContainerMetrics());
+            ContainerMetrics metrics = containerMetrics.get(container.getId());
             
             // Reset existing connections
             while (container.getActiveConnections() > 0) {
                 container.decrementActiveConnections();
             }
             
-            // Simulate new container load
+            // Add new connections
             for (int i = 0; i < connectionsPerContainer; i++) {
                 container.incrementActiveConnections();
             }
             
-            // Update metrics
-            ContainerMetrics metrics = containerMetrics.get(container.getId());
-            metrics.updateMetrics(container.getActiveConnections(), connectionsPerContainer * 1024); // Simulate 1KB per connection
-            
-            System.out.println("Container " + container.getId() +
-                    " active connections: " + container.getActiveConnections());
+            metrics.updateMetrics(container.getActiveConnections(), connectionsPerContainer * 1024);
+            System.out.println("Container " + container.getId() + ": " + container.getActiveConnections() + " connections");
         }
         
-        // Force a scaling check
+        // Trigger scaling check
         checkScaling();
     }
+
     
    
   
@@ -267,9 +308,7 @@ public class LoadBalancer {
                     // Log container status changes
                     Boolean previousStatus = containerStatus.get(container.getId());
                     if (previousStatus != null && previousStatus != isHealthy) {
-                        System.out.println("Container " + container.getId() +
-                                " health status changed from " +
-                                previousStatus + " to " + isHealthy);
+                        System.out.println(container.getId() + " health status changed from " + previousStatus + " to " + isHealthy);
                     }
                 } catch (Exception e) {
                     System.err.println("Error during health check for container " +
@@ -301,7 +340,7 @@ public class LoadBalancer {
         containers.add(container);
         containerStatus.put(container.getId(), true);
         containerPriorities.put(container.getId(), 1);
-        System.out.println("Added container: " + container.getId());
+        System.out.println("Added: " + container.getId());
     }
     
     public FileStorageContainer getContainerForFileChunk(String fileId, int chunkNumber, String operationType) {
@@ -324,7 +363,7 @@ public class LoadBalancer {
                     // Get the container ID where this chunk was stored
                     String containerId = metadata.getContainerForChunk(chunkNumber);
                     if (containerId != null) {
-                        System.out.println("Download operation - retrieving from original container: " + containerId);
+                        System.out.println("Download operation - retrieving from original " + containerId);
                         // Find and return the matching container
                         return containers.stream()
                                 .filter(c -> c.getId().equals(containerId))
@@ -441,10 +480,10 @@ public class LoadBalancer {
         if (containerStatus.containsKey(containerId)) {
             containerStatus.put(containerId, isHealthy);
             if(isHealthy){
-                System.out.println("Container " + containerId + " health: Ok");
+                System.out.println(containerId + " health: Ok");
             }
             else{
-                System.out.println("Container " + containerId + " health: Poor");
+                System.out.println(containerId + " health: Poor");
             }
             
         }

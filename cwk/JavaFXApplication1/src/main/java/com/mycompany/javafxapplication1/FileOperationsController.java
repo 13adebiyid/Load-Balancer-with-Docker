@@ -66,7 +66,7 @@ public class FileOperationsController {
         
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
     }
-
+    
     //REMOVEEEEEEEEEEE
     
     @FXML
@@ -77,21 +77,29 @@ public class FileOperationsController {
             @Override
             protected Void call() throws Exception {
                 try {
-                    // Test scaling up (simulate high load)
-                    updateMessage("Testing scale up with high load...");
-                    loadBalancerClient.getLoadBalancer().simulateLoad(100); // High load
-                    Thread.sleep(5000); // Wait 5 seconds
+                    LoadBalancer loadBalancer = loadBalancerClient.getLoadBalancer();
                     
-                    updateMessage("Waiting for scale up reaction...");
-                    Thread.sleep(2000);
+                    // Test scale up
+                    updateMessage("Phase 1: Testing scale up with high load...");
+                    System.out.println("\n=== Testing Scale Up ===");
+                    loadBalancer.simulateLoad(100); // High load
+                    Thread.sleep(10000); // Wait for scaling to complete
                     
-                    // Test scaling down (simulate low load)
-                    updateMessage("Testing scale down with low load...");
-                    loadBalancerClient.getLoadBalancer().simulateLoad(10); // Low load
-                    Thread.sleep(5000);
+                    // Test normal load
+                    updateMessage("Phase 2: Testing normal load...");
+                    System.out.println("\n=== Testing Normal Load ===");
+                    loadBalancer.simulateLoad(50); // Medium load
+                    Thread.sleep(10000);
+                    
+                    // Test scale down
+                    updateMessage("Phase 3: Testing scale down with low load...");
+                    System.out.println("\n=== Testing Scale Down ===");
+                    loadBalancer.simulateLoad(20); // Low load
+                    Thread.sleep(10000);
                     
                     updateMessage("Scaling test complete");
                     return null;
+                    
                 } catch (Exception e) {
                     updateMessage("Test failed: " + e.getMessage());
                     throw e;
@@ -100,14 +108,17 @@ public class FileOperationsController {
         };
         
         testTask.messageProperty().addListener((obs, old, newMessage) -> {
-            Platform.runLater(() -> fileTextField.setText(newMessage));
+            Platform.runLater(() -> {
+                fileTextField.setText(newMessage);
+                System.out.println(newMessage);
+            });
         });
         
         testTask.setOnSucceeded(e -> {
             Platform.runLater(() -> {
                 setControlsEnabled(true);
                 showAlert(Alert.AlertType.INFORMATION, "Test Complete",
-                        "Scaling test completed. Check console for results.");
+                        "Dynamic scaling test completed. Check console for detailed results.");
             });
         });
         
@@ -902,7 +913,7 @@ public class FileOperationsController {
                             // Delete the chunk from the container
                             FileStorageContainer container = getContainerById(containerId);
                             if (container != null) {
-                                String chunkPath = "/storage/" + containerId + "/" + file.getFileId() + "_chunk_" + i; 
+                                String chunkPath = "/storage/" + containerId + "/" + file.getFileId() + "_chunk_" + i;
                                 container.deleteFileChunk(chunkPath);
                             }
                             
