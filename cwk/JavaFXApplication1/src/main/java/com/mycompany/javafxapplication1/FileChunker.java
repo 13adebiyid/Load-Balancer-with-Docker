@@ -12,10 +12,8 @@ import java.util.logging.*;
 public class FileChunker {
     private static final Logger logger = Logger.getLogger(FileChunker.class.getName());
     private static final int DEFAULT_CHUNK_SIZE = 1024 * 1024; // 1MB default
-    private final FileEncryption encryption;
     
     public FileChunker() {
-        this.encryption = new FileEncryption();
     }
     
     /**
@@ -29,14 +27,6 @@ public class FileChunker {
             throw new FileNotFoundException("File not found: " + file.getPath());
         }
         
-        //        debug code
-        System.out.println("\nDebug: Starting file chunking process");
-        System.out.println("File: " + file.getName());
-        System.out.println("Total size: " + file.length() + " bytes");
-        System.out.println("Chunk size: " + chunkSize + " bytes");
-        //        debug code
-        
-        
         List<ChunkInfo> chunks = new ArrayList<>();
         MessageDigest md;
         try {
@@ -44,6 +34,11 @@ public class FileChunker {
         } catch (Exception e) {
             throw new IOException("Failed to initialize checksum", e);
         }
+        
+        // Create a single FileEncryption instance for all chunks
+        FileEncryption encryption = new FileEncryption();
+        String encryptionKey = encryption.getKeyAsString();
+        logger.info("Created encryption key for all chunks: " + encryptionKey);
         
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[chunkSize];
@@ -58,7 +53,7 @@ public class FileChunker {
                     chunkData = buffer.clone();
                 }
                 
-                // Encrypt chunk first
+                // Encrypt chunk using the same encryption instance
                 byte[] encryptedData = encryption.encryptData(chunkData);
                 if (encryptedData == null) {
                     throw new IOException("Failed to encrypt chunk " + chunkNumber);
@@ -69,12 +64,11 @@ public class FileChunker {
                 md.update(encryptedData);
                 String checksum = Base64.getEncoder().encodeToString(md.digest());
                 
-                // Create chunk info
                 ChunkInfo chunk = new ChunkInfo(
                         chunkNumber,
                         bytesRead,
                         checksum,
-                        encryption.getKeyAsString(),
+                        encryptionKey,  // Use the same key for all chunks
                         encryptedData
                 );
                 
@@ -99,6 +93,7 @@ public class FileChunker {
      */
     public void reassembleFile(List<ChunkInfo> chunks, File outputFile) throws IOException {
         chunks.sort(Comparator.comparingInt(ChunkInfo::getNumber));
+        logger.info("Starting file reassembly with " + chunks.size() + " chunks");
         
         MessageDigest md;
         try {
@@ -109,28 +104,50 @@ public class FileChunker {
         
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             for (ChunkInfo chunk : chunks) {
-                // Verify checksum of encrypted data first
+                logger.info("Processing chunk " + chunk.getNumber());
+                
+                // Verify checksum of encrypted data
                 md.reset();
                 md.update(chunk.getData());
                 String calculatedChecksum = Base64.getEncoder().encodeToString(md.digest());
                 
                 if (!calculatedChecksum.equals(chunk.getChecksum())) {
+                    logger.severe("Chunk " + chunk.getNumber() + " failed checksum verification");
+                    logger.severe("Expected: " + chunk.getChecksum());
+                    logger.severe("Got: " + calculatedChecksum);
                     throw new IOException("Chunk " + chunk.getNumber() + " failed checksum verification");
                 }
                 
-                // Decrypt chunk after verifying integrity
-                FileEncryption chunkEncryption = FileEncryption.fromKey(chunk.getEncryptionKey());
-                byte[] decryptedData = chunkEncryption.decryptData(chunk.getData());
+                logger.info("Chunk " + chunk.getNumber() + " passed checksum verification");
                 
-                if (decryptedData == null) {
-                    throw new IOException("Failed to decrypt chunk " + chunk.getNumber());
+                // Get encryption key and validate
+                String key = chunk.getEncryptionKey();
+                if (key == null || key.trim().isEmpty()) {
+                    logger.severe("Missing encryption key for chunk " + chunk.getNumber());
+                    throw new IOException("Missing encryption key for chunk " + chunk.getNumber());
                 }
                 
-                // Write decrypted data
-                fos.write(decryptedData);
-                fos.flush();
+                logger.info("Using encryption key for chunk " + chunk.getNumber() + ": " + key);
                 
-                logger.info(String.format("Reassembled chunk %d", chunk.getNumber()));
+                try {
+                    // Create new encryption instance for this chunk
+                    FileEncryption chunkEncryption = FileEncryption.fromKey(key);
+                    byte[] decryptedData = chunkEncryption.decryptData(chunk.getData());
+                    
+                    if (decryptedData == null) {
+                        logger.severe("Decryption returned null for chunk " + chunk.getNumber());
+                        throw new IOException("Failed to decrypt chunk " + chunk.getNumber());
+                    }
+                    
+                    fos.write(decryptedData);
+                    fos.flush();
+                    
+                    logger.info(String.format("Successfully reassembled chunk %d", chunk.getNumber()));
+                    
+                } catch (Exception e) {
+                    logger.severe("Error decrypting chunk " + chunk.getNumber() + ": " + e.getMessage());
+                    throw new IOException("Failed to decrypt chunk " + chunk.getNumber(), e);
+                }
             }
         }
     }

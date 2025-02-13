@@ -6,24 +6,29 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.logging.Logger;
 
 /**
  * Handles encryption and decryption of file chunks using AES
  */
 public class FileEncryption {
+    private static final Logger logger = Logger.getLogger(FileEncryption.class.getName());
     private SecretKey secretKey;
-    private static final String ALGORITHM = "AES";
+    private static final String KEY_ALGORITHM = "AES";
+    private static final String CIPHER_ALGORITHM = "AES/ECB/PKCS5Padding";
     
     /**
      * Constructor - generates a new encryption key (only use for new files)
      */
     public FileEncryption() {
         try {
-            KeyGenerator keyGen = KeyGenerator.getInstance(ALGORITHM);
-            keyGen.init(128);
+            KeyGenerator keyGen = KeyGenerator.getInstance(KEY_ALGORITHM);
+            keyGen.init(128, new SecureRandom());
             this.secretKey = keyGen.generateKey();
+            logger.info("Created new encryption key: " + getKeyAsString());
         } catch (Exception e) {
-            System.out.println("Error creating encryption key: " + e.getMessage());
+            logger.severe("Error creating encryption key: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
@@ -33,9 +38,11 @@ public class FileEncryption {
     public FileEncryption(String keyString) {
         try {
             byte[] keyData = Base64.getDecoder().decode(keyString);
-            this.secretKey = new SecretKeySpec(keyData, ALGORITHM);
+            this.secretKey = new SecretKeySpec(keyData, KEY_ALGORITHM);
+            logger.info("Loaded existing encryption key: " + keyString);
         } catch (Exception e) {
-            System.out.println("Error loading encryption key: " + e.getMessage());
+            logger.severe("Error loading encryption key: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
@@ -43,12 +50,20 @@ public class FileEncryption {
      * Encrypts a chunk of file data
      */
     public byte[] encryptData(byte[] data) {
+        if (data == null || data.length == 0) {
+            logger.warning("Attempted to encrypt null or empty data");
+            return null;
+        }
+        
         try {
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-            return cipher.doFinal(data);
+            byte[] encryptedData = cipher.doFinal(data);
+            logger.info("Successfully encrypted " + data.length + " bytes with key: " + getKeyAsString());
+            return encryptedData;
         } catch (Exception e) {
-            System.out.println("Error encrypting data: " + e.getMessage());
+            logger.severe("Error encrypting data with key " + getKeyAsString() + ": " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
@@ -57,12 +72,20 @@ public class FileEncryption {
      * Decrypts a chunk of file data
      */
     public byte[] decryptData(byte[] encryptedData) {
+        if (encryptedData == null || encryptedData.length == 0) {
+            logger.warning("Attempted to decrypt null or empty data");
+            return null;
+        }
+        
         try {
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
             cipher.init(Cipher.DECRYPT_MODE, secretKey);
-            return cipher.doFinal(encryptedData);
+            byte[] decryptedData = cipher.doFinal(encryptedData);
+            logger.info("Successfully decrypted " + encryptedData.length + " bytes with key: " + getKeyAsString());
+            return decryptedData;
         } catch (Exception e) {
-            System.out.println("Error decrypting data: " + e.getMessage());
+            logger.severe("Error decrypting data with key " + getKeyAsString() + ": " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }
@@ -71,6 +94,7 @@ public class FileEncryption {
      * Gets the encryption key as a Base64 string
      */
     public String getKeyAsString() {
+        if (secretKey == null) return "null-key";
         return Base64.getEncoder().encodeToString(secretKey.getEncoded());
     }
     
@@ -78,6 +102,10 @@ public class FileEncryption {
      * Creates a FileEncryption instance from a stored key
      */
     public static FileEncryption fromKey(String keyString) {
+        if (keyString == null || keyString.trim().isEmpty()) {
+            throw new IllegalArgumentException("Encryption key cannot be null or empty");
+        }
+        logger.info("Creating FileEncryption instance from key: " + keyString);
         return new FileEncryption(keyString);
     }
 }

@@ -273,7 +273,7 @@ public class FileOperationsController {
                 }
             });
             
-            contextMenu.getItems().addAll(downloadItem, shareItem, accessItem, deleteItem, remoteTerminalItem, editItem);
+            contextMenu.getItems().addAll(downloadItem, shareItem, accessItem, deleteItem);
             
             row.contextMenuProperty().bind(
                     javafx.beans.binding.Bindings.when(row.emptyProperty())
@@ -688,6 +688,7 @@ public class FileOperationsController {
                         metadata.addChunkLocation(chunk.getNumber(), containerId);
                         
                         // Store the encryption key that was used to encrypt this chunk
+                        // Only store key after successful chunk upload
                         database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
                         System.out.println("Encryption key stored for chunk " + chunk.getNumber());
                         

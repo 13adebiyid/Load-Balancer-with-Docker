@@ -111,27 +111,25 @@ public class TextEditorController {
             // Update file size in metadata
             currentFile.setTotalSize(tempFile.length());
             
-            // Create FileChunker instance for the new content
-            FileChunker chunker = new FileChunker();
-            int chunkSize = chunker.getOptimalChunkSize(tempFile.length());
-            List<FileChunker.ChunkInfo> chunks = chunker.splitFile(tempFile, chunkSize);
-            
-            // Update total chunks in metadata
-            currentFile.setTotalChunks(chunks.size());
-            
-            // Remove old encryption keys first
+            // Delete old encryption keys before creating new ones
             database.deleteEncryptionKeys(currentFile.getFileId());
             
-            // Upload the file - this will handle chunk uploading and key storage
-            fileOps.uploadFileInChunks(tempFile, currentFile.getFileId());
+            try {
+                // Upload file in chunks - this will handle chunk creation, encryption, and key storage
+                fileOps.uploadFileInChunks(tempFile, currentFile.getFileId());
+                
+                // Save the updated metadata
+                database.saveFileMetadata(currentFile);
+                
+                statusLabel.setText("File saved successfully");
+                saveButton.setDisable(true);
+                
+            } catch (Exception e) {
+                showError("Save Failed", "Error during file upload: " + e.getMessage());
+                e.printStackTrace();
+                return;
+            }
             
-            // Save the updated metadata
-            database.saveFileMetadata(currentFile);
-            
-            statusLabel.setText("File saved successfully");
-            saveButton.setDisable(true);
-            
-            // Clean up temporary file
             tempFile.delete();
             
         } catch (Exception e) {
