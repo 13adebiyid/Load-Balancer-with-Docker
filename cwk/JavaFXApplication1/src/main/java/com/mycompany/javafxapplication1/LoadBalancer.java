@@ -27,7 +27,6 @@ public class LoadBalancer {
     private static final double SCALE_DOWN_THRESHOLD = 0.3; // 30% load triggers scale down
     
     private Map<String, ContainerMetrics> containerMetrics;
-    private final RequestQueue requestQueue;
     
     public class ContainerMetrics {
         private int activeConnections;
@@ -59,46 +58,10 @@ public class LoadBalancer {
         currentAlgorithm = "RoundRobin";
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
         this.database = new DB();
-        this.requestQueue = new RequestQueue();
         startHealthChecks();
         startScalingMonitor();
-        startRequestProcessor();
     }
     
-    private void startRequestProcessor() {
-        Thread processor = new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    Request request = requestQueue.getNextRequest();
-                    if (request != null) {
-                        processRequest(request);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-        processor.setDaemon(true);
-        processor.start();
-    }
-    
-    void processRequest(Request request) {
-        try {
-            FileStorageContainer container = getContainerForFileChunk(
-                    request.getFileId(),
-                    request.getChunkNumber(),
-                    request.getOperationType()
-            );
-            
-            if (container != null) {
-                System.out.println("Assigned container " + container.getId() +
-                        " to request from user " + request.getUserId());
-            }
-        } catch (Exception e) {
-            System.err.println("Error processing request: " + e.getMessage());
-        }
-    }
     
     private void startScalingMonitor() {
         ScheduledExecutorService scalingExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -328,7 +291,6 @@ public class LoadBalancer {
             healthCheckExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        requestQueue.shutdown();
     }
     
     /**
@@ -487,9 +449,5 @@ public class LoadBalancer {
             
         }
     }
-    
-       public RequestQueue getRequestQueue() {
-    return requestQueue;
-}
-    
+
 }
