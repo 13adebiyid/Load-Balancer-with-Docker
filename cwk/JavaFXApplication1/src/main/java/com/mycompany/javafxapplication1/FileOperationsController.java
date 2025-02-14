@@ -80,74 +80,7 @@ public class FileOperationsController {
         
         FileLockManager lockManager = FileLockManager.getInstance();
     }
-    
-    //REMOVEEEEEEEEEEE
-    
-    @FXML
-    private void testScalingHandler(ActionEvent event) {
-        setControlsEnabled(false);
-        
-        Task<Void> testTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                try {
-                    LoadBalancer loadBalancer = loadBalancerClient.getLoadBalancer();
-                    
-                    // Test scale up
-                    updateMessage("Phase 1: Testing scale up with high load...");
-                    System.out.println("\n=== Testing Scale Up ===");
-                    loadBalancer.simulateLoad(100); // High load
-                    Thread.sleep(10000); // Wait for scaling to complete
-                    
-                    // Test normal load
-                    updateMessage("Phase 2: Testing normal load...");
-                    System.out.println("\n=== Testing Normal Load ===");
-                    loadBalancer.simulateLoad(50); // Medium load
-                    Thread.sleep(10000);
-                    
-                    // Test scale down
-                    updateMessage("Phase 3: Testing scale down with low load...");
-                    System.out.println("\n=== Testing Scale Down ===");
-                    loadBalancer.simulateLoad(20); // Low load
-                    Thread.sleep(10000);
-                    
-                    updateMessage("Scaling test complete");
-                    return null;
-                    
-                } catch (Exception e) {
-                    updateMessage("Test failed: " + e.getMessage());
-                    throw e;
-                }
-            }
-        };
-        
-        testTask.messageProperty().addListener((obs, old, newMessage) -> {
-            Platform.runLater(() -> {
-                fileTextField.setText(newMessage);
-                System.out.println(newMessage);
-            });
-        });
-        
-        testTask.setOnSucceeded(e -> {
-            Platform.runLater(() -> {
-                setControlsEnabled(true);
-                showAlert(Alert.AlertType.INFORMATION, "Test Complete",
-                        "Dynamic scaling test completed. Check console for detailed results.");
-            });
-        });
-        
-        testTask.setOnFailed(e -> {
-            Platform.runLater(() -> {
-                setControlsEnabled(true);
-                showAlert(Alert.AlertType.ERROR, "Test Failed",
-                        "Scaling test failed: " + testTask.getException().getMessage());
-            });
-        });
-        
-        new Thread(testTask).start();
-    }
-    //-----------------------------------------------------------------------------------------
-    
+
     /**
      * Sets up initial UI state
      */

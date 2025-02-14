@@ -47,6 +47,15 @@ public class LoadBalancer {
             this.lastUsed = System.currentTimeMillis();
         }
     }
+    //test-----------------------------------
+    public int getContainerCount() {
+        return containers.size();
+    }
+    
+    public List<FileStorageContainer> getContainers() {
+        return new ArrayList<>(containers);  // Return a copy for safety
+    }
+    //test------------------------------------
     
     /**
      * Constructor - initializes the load balancer
@@ -153,45 +162,6 @@ public class LoadBalancer {
             System.out.println("Warning! Dynamic system scaling is no longer operational.");
         }
     }
-
-    
-    //REMOVE
-//    public void simulateLoad(int numberOfConnections) {
-//        if (containers.isEmpty()) {
-//            System.out.println("No containers available to simulate load");
-//            return;
-//        }
-//        
-//        System.out.println("\n=== Starting Load Simulation ===");
-//        System.out.println("Total simulated connections: " + numberOfConnections);
-//        System.out.println("Current containers: " + containers.size());
-//        
-//        int connectionsPerContainer = numberOfConnections / containers.size();
-//        
-//        // Reset all container metrics
-//        for (FileStorageContainer container : containers) {
-//            containerMetrics.putIfAbsent(container.getId(), new ContainerMetrics());
-//            ContainerMetrics metrics = containerMetrics.get(container.getId());
-//            
-//            // Reset existing connections
-//            while (container.getActiveConnections() > 0) {
-//                container.decrementActiveConnections();
-//            }
-//            
-//            // Add new connections
-//            for (int i = 0; i < connectionsPerContainer; i++) {
-//                container.incrementActiveConnections();
-//            }
-//            
-//            metrics.updateMetrics(container.getActiveConnections(), connectionsPerContainer * 1024);
-//            System.out.println("Container " + container.getId() + ": " + container.getActiveConnections() + " connections");
-//        }
-//        
-//        // Trigger scaling check
-//        checkScaling();
-//    }
-
-    //-----------------------------------------------------------------------------
     
     // Calculate average load across containers
     private double calculateAverageLoad() {
@@ -422,6 +392,7 @@ public class LoadBalancer {
         FileStorageContainer selected = null;
         if (currentAlgorithm.equals("RoundRobin")) {
             selected = roundRobinSelect();
+            System.out.println("Round Robin is being used for ");
         }
         else if (currentAlgorithm.equals("ShortestJob")) {
             selected = shortestJobSelect();
