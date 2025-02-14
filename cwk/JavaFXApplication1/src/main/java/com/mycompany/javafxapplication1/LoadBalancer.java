@@ -25,6 +25,7 @@ public class LoadBalancer {
     private static final int MAX_CONTAINERS = 10;
     private static final double SCALE_UP_THRESHOLD = 0.8;   // 80% load triggers scale up
     private static final double SCALE_DOWN_THRESHOLD = 0.3; // 30% load triggers scale down
+    private static final int CHECK_SCALING_INTERVAL = 300;
     private final DockerContainerManager dockerManager;
     
     private Map<String, ContainerMetrics> containerMetrics;
@@ -54,7 +55,8 @@ public class LoadBalancer {
         containers = new ArrayList<>();
         containerStatus = new HashMap<>();
         containerPriorities = new HashMap<>();
-        containerMetrics = new HashMap<>();//REMOVE
+//        containerMetrics = new HashMap<>();
+        
         currentContainerIndex = 0;
         currentAlgorithm = "RoundRobin";
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -66,29 +68,41 @@ public class LoadBalancer {
     
     private void startScalingMonitor() {
         ScheduledExecutorService scalingExecutor = Executors.newSingleThreadScheduledExecutor();
-        scalingExecutor.scheduleAtFixedRate(this::checkScaling, 0, 300, TimeUnit.SECONDS);
+        scalingExecutor.scheduleAtFixedRate(
+            this::checkScaling, 
+            0, 
+            CHECK_SCALING_INTERVAL, 
+            TimeUnit.SECONDS
+        );
     }
     
-    // Method to check if scaling is needed
+//     Method to check if scaling is needed
     private void checkScaling() {
         double averageLoad = calculateAverageLoad();
         System.out.println("\n=== Checking System Load ===");
         System.out.println("Current system load: " + String.format("%.2f", averageLoad * 100) + "%");
-        System.out.println("Current container count: " + containers.size());
         
-        int targetContainers = containers.size();
+        int currentContainers = dockerManager.getCurrentContainerCount();
+        if (currentContainers == -1) {
+            System.err.println("Failed to get current container count");
+            return;
+        }
+        
+        System.out.println("Current container count: " + currentContainers);
+        
         boolean needsScaling = false;
-        
-        if (averageLoad > SCALE_UP_THRESHOLD && containers.size() < MAX_CONTAINERS) {
-            targetContainers = Math.min(containers.size() + 2, MAX_CONTAINERS);
+        int targetContainers = currentContainers;
+
+        if (averageLoad > SCALE_UP_THRESHOLD && currentContainers < DockerContainerManager.MAX_CONTAINERS) {
+            targetContainers = Math.min(currentContainers + 2, DockerContainerManager.MAX_CONTAINERS);
             System.out.println("High load detected - scaling up to " + targetContainers + " containers");
             needsScaling = true;
-        } else if (averageLoad < SCALE_DOWN_THRESHOLD && containers.size() > MIN_CONTAINERS) {
-            targetContainers = Math.max(containers.size() - 1, MIN_CONTAINERS);
+        } else if (averageLoad < SCALE_DOWN_THRESHOLD && currentContainers > DockerContainerManager.MIN_CONTAINERS) {
+            targetContainers = Math.max(currentContainers - 1, DockerContainerManager.MIN_CONTAINERS);
             System.out.println("Low load detected - scaling down to " + targetContainers + " containers");
             needsScaling = true;
         }
-        
+
         if (needsScaling) {
             dockerManager.scaleContainers(targetContainers);
             // Wait for containers to be ready
@@ -99,7 +113,7 @@ public class LoadBalancer {
                 Thread.currentThread().interrupt();
             }
         }
-        
+
         System.out.println("=== Scaling Check Complete ===\n");
     }
     
@@ -117,52 +131,66 @@ public class LoadBalancer {
                 newContainers.add(container);
                 containerStatus.put(containerId, true);
                 containerPriorities.put(containerId, 1);
+                
+                // Initialize metrics for new containers
+                if (!containerMetrics.containsKey(containerId)) {
+                    containerMetrics.put(containerId, new ContainerMetrics());
+                }
             }
             containers = newContainers;
             System.out.println("Updated container list - now managing " + containers.size() + " containers");
         }
     }
-    
-    //REMOVE
-    public void simulateLoad(int numberOfConnections) {
-        if (containers.isEmpty()) {
-            System.out.println("No containers available to simulate load");
-            return;
+
+    //shutdown health checks and container management to free up space when not needed
+    public void shutdown() {
+        if (healthCheckExecutor != null) {
+            healthCheckExecutor.shutdown();
+            System.out.println("Warning! Health checks have stopped.");
         }
-        
-        System.out.println("\n=== Starting Load Simulation ===");
-        System.out.println("Total simulated connections: " + numberOfConnections);
-        System.out.println("Current containers: " + containers.size());
-        
-        int connectionsPerContainer = numberOfConnections / containers.size();
-        
-        // Reset all container metrics
-        for (FileStorageContainer container : containers) {
-            containerMetrics.putIfAbsent(container.getId(), new ContainerMetrics());
-            ContainerMetrics metrics = containerMetrics.get(container.getId());
-            
-            // Reset existing connections
-            while (container.getActiveConnections() > 0) {
-                container.decrementActiveConnections();
-            }
-            
-            // Add new connections
-            for (int i = 0; i < connectionsPerContainer; i++) {
-                container.incrementActiveConnections();
-            }
-            
-            metrics.updateMetrics(container.getActiveConnections(), connectionsPerContainer * 1024);
-            System.out.println("Container " + container.getId() + ": " + container.getActiveConnections() + " connections");
+        if (dockerManager != null) {
+            dockerManager.shutdown();
+            System.out.println("Warning! Dynamic system scaling is no longer operational.");
         }
-        
-        // Trigger scaling check
-        checkScaling();
     }
 
     
-   
-  
-    
+    //REMOVE
+//    public void simulateLoad(int numberOfConnections) {
+//        if (containers.isEmpty()) {
+//            System.out.println("No containers available to simulate load");
+//            return;
+//        }
+//        
+//        System.out.println("\n=== Starting Load Simulation ===");
+//        System.out.println("Total simulated connections: " + numberOfConnections);
+//        System.out.println("Current containers: " + containers.size());
+//        
+//        int connectionsPerContainer = numberOfConnections / containers.size();
+//        
+//        // Reset all container metrics
+//        for (FileStorageContainer container : containers) {
+//            containerMetrics.putIfAbsent(container.getId(), new ContainerMetrics());
+//            ContainerMetrics metrics = containerMetrics.get(container.getId());
+//            
+//            // Reset existing connections
+//            while (container.getActiveConnections() > 0) {
+//                container.decrementActiveConnections();
+//            }
+//            
+//            // Add new connections
+//            for (int i = 0; i < connectionsPerContainer; i++) {
+//                container.incrementActiveConnections();
+//            }
+//            
+//            metrics.updateMetrics(container.getActiveConnections(), connectionsPerContainer * 1024);
+//            System.out.println("Container " + container.getId() + ": " + container.getActiveConnections() + " connections");
+//        }
+//        
+//        // Trigger scaling check
+//        checkScaling();
+//    }
+
     //-----------------------------------------------------------------------------
     
     // Calculate average load across containers
@@ -316,19 +344,6 @@ public class LoadBalancer {
                 }
             }
         }, 0, HEALTH_CHECK_INTERVAL, TimeUnit.SECONDS);
-    }
-    
-    // Make sure to clean up when shutting down
-    public void shutdown() {
-        healthCheckExecutor.shutdown();
-        try {
-            if (!healthCheckExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
-                healthCheckExecutor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            healthCheckExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
     }
     
     /**
