@@ -27,7 +27,7 @@ public class PrimaryController {
     
     @FXML
     private PasswordField passPasswordField;
-    
+  
     @FXML
     private void registerBtnHandler(ActionEvent event) {
         Stage secondaryStage = new Stage();
@@ -72,7 +72,6 @@ public class PrimaryController {
                 FXMLLoader loader;
                 
                 if ("ADMIN".equals(userRole)) {
-                    // Admin goes to user management screen
                     loader = new FXMLLoader(getClass().getResource("secondary.fxml"));
                     Parent root = loader.load();
                     Scene scene = new Scene(root, 640, 480);
@@ -81,7 +80,6 @@ public class PrimaryController {
                     controller.initialise(credentials);
                     secondaryStage.setTitle("User Management");
                 } else {
-                    // Standard users go directly to file operations
                     loader = new FXMLLoader(getClass().getResource("file_operations.fxml"));
                     Parent root = loader.load();
                     Scene scene = new Scene(root, 640, 480);

@@ -11,16 +11,13 @@ import java.util.logging.*;
  */
 public class FileChunker {
     private static final Logger logger = Logger.getLogger(FileChunker.class.getName());
-    private static final int DEFAULT_CHUNK_SIZE = 1024 * 1024; // 1MB default
+    private static final int DEFAULT_CHUNK_SIZE = 1024 * 1024; // 1MB 
     
     public FileChunker() {
     }
     
     /**
-     * Splits a file into chunks with checksums
-     * @param file The file to split
-     * @param chunkSize Size of each chunk in bytes
-     * @return List of chunk metadata
+     * Splits a file into chunks with check sums
      */
     public List<ChunkInfo> splitFile(File file, int chunkSize) throws IOException {
         if (!file.exists()) {
@@ -35,7 +32,6 @@ public class FileChunker {
             throw new IOException("Failed to initialize checksum", e);
         }
         
-        // Create a single FileEncryption instance for all chunks
         FileEncryption encryption = new FileEncryption();
         String encryptionKey = encryption.getKeyAsString();
         logger.info("Created encryption key for all chunks: " + encryptionKey);
@@ -53,13 +49,11 @@ public class FileChunker {
                     chunkData = buffer.clone();
                 }
                 
-                // Encrypt chunk using the same encryption instance
                 byte[] encryptedData = encryption.encryptData(chunkData);
                 if (encryptedData == null) {
                     throw new IOException("Failed to encrypt chunk " + chunkNumber);
                 }
                 
-                // Calculate checksum on encrypted data
                 md.reset();
                 md.update(encryptedData);
                 String checksum = Base64.getEncoder().encodeToString(md.digest());
@@ -68,7 +62,7 @@ public class FileChunker {
                         chunkNumber,
                         bytesRead,
                         checksum,
-                        encryptionKey,  // Use the same key for all chunks
+                        encryptionKey,  
                         encryptedData
                 );
                 
@@ -86,10 +80,7 @@ public class FileChunker {
     
     
     /**
-     * Reassembles chunks back into a file, verifying checksums
-     * @param chunks List of chunks to reassemble
-     * @param outputFile The file to write to
-     * @throws IOException if reassembly fails
+     * Reassembles chunks back into a file, verifying check sums
      */
     public void reassembleFile(List<ChunkInfo> chunks, File outputFile) throws IOException {
         chunks.sort(Comparator.comparingInt(ChunkInfo::getNumber));
@@ -106,7 +97,6 @@ public class FileChunker {
             for (ChunkInfo chunk : chunks) {
                 logger.info("Processing chunk " + chunk.getNumber());
                 
-                // Verify checksum of encrypted data
                 md.reset();
                 md.update(chunk.getData());
                 String calculatedChecksum = Base64.getEncoder().encodeToString(md.digest());
@@ -120,7 +110,6 @@ public class FileChunker {
                 
                 logger.info("Chunk " + chunk.getNumber() + " passed checksum verification");
                 
-                // Get encryption key and validate
                 String key = chunk.getEncryptionKey();
                 if (key == null || key.trim().isEmpty()) {
                     logger.severe("Missing encryption key for chunk " + chunk.getNumber());
@@ -130,7 +119,6 @@ public class FileChunker {
                 logger.info("Using encryption key for chunk " + chunk.getNumber() + ": " + key);
                 
                 try {
-                    // Create new encryption instance for this chunk
                     FileEncryption chunkEncryption = FileEncryption.fromKey(key);
                     byte[] decryptedData = chunkEncryption.decryptData(chunk.getData());
                     
@@ -154,15 +142,12 @@ public class FileChunker {
     
     /**
      * Gets the optimal chunk size based on file size
-     * @param fileSize Total file size in bytes
-     * @return Recommended chunk size in bytes
      */
     public int getOptimalChunkSize(long fileSize) {
         if (fileSize < DEFAULT_CHUNK_SIZE) {
-            return (int) fileSize;  // Single chunk for small files
+            return (int) fileSize;  
         }
         
-        // Aim for around 10 chunks, but no larger than 10MB per chunk
         int chunkSize = (int) (fileSize / 10);
         return Math.min(chunkSize, 10 * DEFAULT_CHUNK_SIZE);
     }
@@ -186,7 +171,6 @@ public class FileChunker {
             this.data = data;
         }
         
-        // Getters
         public int getNumber() { return number; }
         public int getSize() { return size; }
         public String getChecksum() { return checksum; }

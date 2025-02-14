@@ -7,17 +7,14 @@ import java.util.logging.Logger;
 import java.util.logging.Level;
 
 /**
- * Manages file locks to prevent concurrent access to files during operations.
- * Uses ReentrantLock for thread safety and timeout capabilities.
+ * Manages file locks 
  */
 public class FileLockManager {
     private static final Logger logger = Logger.getLogger(FileLockManager.class.getName());
     private static FileLockManager instance;
     
-    // Store active locks for each file using a thread-safe map
     private final ConcurrentHashMap<String, FileLock> fileLocks;
     
-    // Maximum time to wait for a lock (in seconds)
     private static final int LOCK_TIMEOUT = 120;
     
     private FileLockManager() {
@@ -32,7 +29,7 @@ public class FileLockManager {
     }
     
     /**
-     * Represents a file lock with its associated metadata
+     * Represents file lock 
      */
     private static class FileLock {
         private final ReentrantLock lock;
@@ -52,20 +49,14 @@ public class FileLockManager {
     }
     
     /**
-     * Attempts to acquire a lock on a file for a specific operation
-     * @param fileId Unique identifier of the file
-     * @param operationType Type of operation (UPLOAD, DOWNLOAD, DELETE)
-     * @param user User attempting the operation
-     * @return true if lock was acquired, false if timeout occurred
+     * Acquire lock on a file
      */
     public boolean lockFile(String fileId, String operationType, String user) {
-        logger.info(String.format("Attempting to lock file %s for %s by user %s", 
-                fileId, operationType, user));
+        logger.info(String.format("Attempting to lock file %s for %s by user %s", fileId, operationType, user));
         
         FileLock fileLock = fileLocks.computeIfAbsent(fileId, k -> new FileLock());
         
         try {
-            // Try to acquire lock with timeout
             if (fileLock.lock.tryLock(LOCK_TIMEOUT, TimeUnit.SECONDS)) {
                 fileLock.updateLockInfo(operationType, user);
                 logger.info(String.format("Lock acquired for file %s by user %s", fileId, user));
@@ -82,9 +73,7 @@ public class FileLockManager {
     }
     
     /**
-     * Releases a lock on a file
-     * @param fileId Unique identifier of the file
-     * @param user User releasing the lock
+     * Releases lock on file
      */
     public void unlockFile(String fileId, String user) {
         FileLock fileLock = fileLocks.get(fileId);
@@ -92,7 +81,6 @@ public class FileLockManager {
             fileLock.lock.unlock();
             logger.info(String.format("Lock released for file %s by user %s", fileId, user));
             
-            // Remove lock if no other threads are waiting
             if (!fileLock.lock.hasQueuedThreads()) {
                 fileLocks.remove(fileId);
             }
@@ -100,9 +88,7 @@ public class FileLockManager {
     }
     
     /**
-     * Checks if a file is currently locked
-     * @param fileId Unique identifier of the file
-     * @return true if file is locked, false otherwise
+     * Checks if file is locked
      */
     public boolean isFileLocked(String fileId) {
         FileLock fileLock = fileLocks.get(fileId);
@@ -110,16 +96,13 @@ public class FileLockManager {
     }
     
     /**
-     * Gets information about a file's lock status
-     * @param fileId Unique identifier of the file
-     * @return String describing the lock status
+     * Gets information about file's lock status
      */
     public String getLockInfo(String fileId) {
         FileLock fileLock = fileLocks.get(fileId);
         if (fileLock != null && fileLock.lock.isLocked()) {
             long lockDuration = (System.currentTimeMillis() - fileLock.lockTime) / 1000;
-            return String.format("Locked by %s for %s operation (Duration: %d seconds)",
-                    fileLock.lockedBy, fileLock.operationType, lockDuration);
+            return String.format("Locked by %s for %s operation (Duration: %d seconds)",fileLock.lockedBy, fileLock.operationType, lockDuration);
         }
         return "Not locked";
     }

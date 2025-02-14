@@ -18,7 +18,7 @@ public class FileEncryption {
     private static final String CIPHER_ALGORITHM = "AES/ECB/PKCS5Padding";
     
     /**
-     * Constructor - generates a new encryption key (only use for new files)
+     * Constructor generates a new encryption key
      */
     public FileEncryption() {
         try {
@@ -33,7 +33,7 @@ public class FileEncryption {
     }
     
     /**
-     * Constructor - loads an existing encryption key from a Base64 string
+     * Constructor loads an existing encryption key from a Base64 string
      */
     public FileEncryption(String keyString) {
         try {
@@ -91,7 +91,7 @@ public class FileEncryption {
     }
     
     /**
-     * Gets the encryption key as a Base64 string
+     * Gets encryption key as Base64 string
      */
     public String getKeyAsString() {
         if (secretKey == null) return "null-key";
@@ -99,7 +99,7 @@ public class FileEncryption {
     }
     
     /**
-     * Creates a FileEncryption instance from a stored key
+     * Create FileEncryption instance from a stored key
      */
     public static FileEncryption fromKey(String keyString) {
         if (keyString == null || keyString.trim().isEmpty()) {

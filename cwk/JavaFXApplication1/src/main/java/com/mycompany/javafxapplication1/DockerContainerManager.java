@@ -13,26 +13,20 @@ public class DockerContainerManager {
     private final ExecutorService executorService;
     
     public DockerContainerManager() {
-        // Create a thread pool for async operations
         this.executorService = Executors.newFixedThreadPool(5);
     }
     
     public void scaleContainers(int targetCount) {
         try {
-            // Create final copy of targetCount for lambda
             final int finalTargetCount = Math.min(Math.max(targetCount, MIN_CONTAINERS), MAX_CONTAINERS);
             
-            String requestBody = String.format(
-                    "{\"service\":\"comp20081-files-container\",\"targetCount\":%d}",
-                    finalTargetCount
-            );
+            String requestBody = String.format("{\"service\":\"comp20081-files-container\",\"targetCount\":%d}",finalTargetCount);
             
             executorService.submit(() -> {
                 try (Socket socket = new Socket(HOST_IP, HOST_PORT);
                         PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
                     
-                    // Send HTTP POST request
                     out.println("POST /scale HTTP/1.1");
                     out.println("Host: " + HOST_IP);
                     out.println("Content-Type: application/json");
@@ -40,7 +34,6 @@ public class DockerContainerManager {
                     out.println();
                     out.println(requestBody);
                     
-                    // Read response
                     String responseLine = in.readLine();
                     if (responseLine != null && responseLine.contains("200")) {
                         System.out.println("Successfully scaled containers to: " + finalTargetCount);
@@ -58,18 +51,15 @@ public class DockerContainerManager {
         }
     }
     
-    // Get the current number of containers
     public int getCurrentContainerCount() {
         try (Socket socket = new Socket(HOST_IP, HOST_PORT);
                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
             
-            // Send HTTP GET request
             out.println("GET /containers/count HTTP/1.1");
             out.println("Host: " + HOST_IP);
             out.println();
             
-            // Read response
             String line;
             boolean headersDone = false;
             StringBuilder response = new StringBuilder();
@@ -84,7 +74,6 @@ public class DockerContainerManager {
                 }
             }
             
-            // Parse response
             String jsonResponse = response.toString();
             if (jsonResponse.contains("count")) {
                 return Integer.parseInt(
@@ -117,7 +106,6 @@ public class DockerContainerManager {
         }
     }
     
-    // Cleanup method to shut down the executor service
     public void shutdown() {
         executorService.shutdown();
     }

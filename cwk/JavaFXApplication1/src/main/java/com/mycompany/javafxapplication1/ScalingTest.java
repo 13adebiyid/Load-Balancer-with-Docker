@@ -1,14 +1,13 @@
 package com.mycompany.javafxapplication1;
 
 /**
- * Test class for demonstrating dynamic scaling functionality
+ * Test class for dynamic scaling functionality (not currently working)
  */
 public class ScalingTest {
     private LoadBalancer loadBalancer;
     private static final int CONTAINER_INIT_TIMEOUT = 30;
     
     public ScalingTest() {
-        // Initialize the load balancer
         this.loadBalancer = new LoadBalancer();
         waitForContainerInitialization();
     }
@@ -45,24 +44,20 @@ public class ScalingTest {
         }
         
         try {
-            // First, simulate normal load to establish baseline
             System.out.println("\nPhase 1: Normal Load");
             simulateLoad(50);  // 50% load
-            Thread.sleep(10000);  // Wait for system to stabilize
+            Thread.sleep(10000);  
             
-            // Simulate high load to trigger scale up
             System.out.println("\nPhase 2: High Load");
-            simulateLoad(90);  // 90% load should trigger scale up
-            Thread.sleep(15000);  // Wait for scaling to complete
+            simulateLoad(90);  // 90% load
+            Thread.sleep(15000);  
             
-            // Return to normal load
             System.out.println("\nPhase 3: Return to Normal Load");
             simulateLoad(50);
             Thread.sleep(10000);
             
-            // Simulate low load to trigger scale down
             System.out.println("\nPhase 4: Low Load");
-            simulateLoad(20);  // 20% load should trigger scale down
+            simulateLoad(20);  // 20% load 
             Thread.sleep(15000);
             
         } catch (InterruptedException e) {
@@ -75,8 +70,7 @@ public class ScalingTest {
     }
     
     /**
-     * Simulates a specific load level by adding connections to containers
-     * @param loadPercentage Desired load level (0-100)
+     * Simulates load level by adding connections to containers
      */
     private void simulateLoad(int loadPercentage) {
         int totalContainers = loadBalancer.getContainerCount();
@@ -91,12 +85,10 @@ public class ScalingTest {
         System.out.println(String.format("Simulating %d%% load (%d connections across %d containers)",loadPercentage, totalConnections, totalContainers));
         
         for (FileStorageContainer container : loadBalancer.getContainers()) {
-            // Reset existing connections
             while (container.getActiveConnections() > 0) {
                 container.decrementActiveConnections();
             }
             
-            // Add new connections for desired load
             for (int i = 0; i < connectionsPerContainer; i++) {
                 container.incrementActiveConnections();
             }

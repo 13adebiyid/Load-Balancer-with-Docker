@@ -3,7 +3,7 @@ package com.mycompany.javafxapplication1;
 import javafx.beans.property.SimpleStringProperty;
 
 /**
- * Represents a user in the system with their credentials and role
+ *  users in system with credentials and role
  */
 public class User {
     private SimpleStringProperty user;
@@ -11,7 +11,7 @@ public class User {
     private SimpleStringProperty role;
     
     /**
-     * Defines possible user roles in the system
+     * Defines all user roles in system
      */
     public enum UserRole {
         STANDARD,
@@ -19,14 +19,14 @@ public class User {
     }
     
     /**
-     * Creates a new user with the specified credentials and default STANDARD role
+     * Creates new user with the credentials and default STANDARD role
      */
     User(String user, String pass) {
         this(user, pass, UserRole.STANDARD.toString());
     }
     
     /**
-     * Creates a new user with the specified credentials and role
+     * Creates new user with specified credentials and role
      */
     User(String user, String pass, String role) {
         this.user = new SimpleStringProperty(user);

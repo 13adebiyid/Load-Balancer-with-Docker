@@ -24,6 +24,7 @@ public class TextEditorController {
     public void initialize() {
         database = new DB();
         fileOps = new FileOperationsController() {
+            //Complications with progress bar so overided the methods to retun nothning
             @Override
             protected void updateProgress(double progress) {
             }
@@ -38,7 +39,6 @@ public class TextEditorController {
             }
         };
         
-        // Initialize all required components
         try {
             fileOps.initializeComponents();
         } catch (Exception e) {
@@ -64,7 +64,6 @@ public class TextEditorController {
         fileNameField.setText(file.getFileName());
         
         try {
-            // Check permissions
             boolean canRead = database.checkFilePermission(file.getFileId(), currentUser, "read");
             hasWriteAccess = database.checkFilePermission(file.getFileId(), currentUser, "write");
             
@@ -73,11 +72,9 @@ public class TextEditorController {
                 return;
             }
             
-            // Set UI state based on permissions
             contentArea.setEditable(hasWriteAccess);
             saveButton.setDisable(!hasWriteAccess);
             
-            // Load file content
             File tempFile = File.createTempFile("edit_", ".tmp");
             try {
                 fileOps.downloadAndAssembleFile(file.getFileId(), tempFile);
@@ -102,21 +99,16 @@ public class TextEditorController {
         }
         
         try {
-            // Create a temporary file with the new content
             File tempFile = File.createTempFile("save_", ".tmp");
             Files.write(tempFile.toPath(), contentArea.getText().getBytes());
             
-            // Update file size in metadata
             currentFile.setTotalSize(tempFile.length());
             
-            // Delete old encryption keys before creating new ones
             database.deleteEncryptionKeys(currentFile.getFileId());
             
             try {
-                // Upload file in chunks - this will handle chunk creation, encryption, and key storage
                 fileOps.uploadFileInChunks(tempFile, currentFile.getFileId());
                 
-                // Save the updated metadata
                 database.saveFileMetadata(currentFile);
                 
                 statusLabel.setText("File saved successfully");
@@ -144,13 +136,11 @@ public class TextEditorController {
             return;
         }
         
-        // Create new file metadata
         String fileId = UUID.randomUUID().toString();
         currentFile = new FileMetadata(fileId, newFileName, currentUser, 0);
         hasWriteAccess = true;
-        isNewFile = true;  // Mark as new file
+        isNewFile = true;  
         
-        // Clear editor
         contentArea.clear();
         contentArea.setEditable(true);
         saveButton.setDisable(false);

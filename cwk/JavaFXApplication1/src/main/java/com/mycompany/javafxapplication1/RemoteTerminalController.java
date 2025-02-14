@@ -22,13 +22,8 @@ public class RemoteTerminalController {
         ssh = new ContainerSSH();
         history = new StringBuilder();
         
-        // Initialize container list
-        containerComboBox.getItems().addAll(
-                "container-1", "container-2",
-                "container-3", "container-4"
-        );
+        containerComboBox.getItems().addAll( "container-1", "container-2","container-3", "container-4");
         
-        // Handle command input
         commandInput.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ENTER) {
                 executeCommand(commandInput.getText());
@@ -36,7 +31,6 @@ public class RemoteTerminalController {
             }
         });
         
-        // Show initial message
         appendOutput("Remote Terminal Ready\nSelect a container and click Connect\n");
     }
     
@@ -50,7 +44,6 @@ public class RemoteTerminalController {
         
         try {
             if (!ssh.isConnected()) {
-                // In a real application, you'd get these from a secure configuration
                 ssh.connect(containerId, "ntu-user", "ntu-user");
                 updateConnectionStatus(true);
                 appendOutput("Connected to " + containerId + "\n");

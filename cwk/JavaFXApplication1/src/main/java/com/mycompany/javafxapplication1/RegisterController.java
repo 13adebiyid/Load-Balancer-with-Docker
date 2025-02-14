@@ -32,7 +32,7 @@ import javafx.stage.Stage;
 public class RegisterController {
     
     /**
-     * Initializes the controller class.
+     * Initializes controller class.
      */
     @FXML
     private Button registerBtn;
@@ -99,7 +99,7 @@ public class RegisterController {
                 SecondaryController controller = loader.getController();
                 secondaryStage.setTitle("Show users");
                 controller.initialise(credentials);
-                String msg = "some data sent from Register Controller";
+                String msg = "Hey buddy, what's that on your head?";
                 secondaryStage.setUserData(msg);
             } else {
                 loader.setLocation(getClass().getResource("register.fxml"));

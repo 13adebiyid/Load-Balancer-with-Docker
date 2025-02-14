@@ -12,8 +12,7 @@ package com.mycompany.javafxapplication1;
 
 /**
  * Main class for starting the Container Orchestrator service
- * This runs inside the GUI container and handles communication
- * with the Python orchestrator on the host machine
+ * with Python orchestrator on my host machine
  */
 public class OrchestratorMain {
     public static void main(String[] args) {
@@ -21,7 +20,6 @@ public class OrchestratorMain {
             ContainerOrchestrator orchestrator = new ContainerOrchestrator();
             System.out.println("Starting Container Orchestrator...");
             
-            // Start the orchestrator in a separate thread since it has a blocking loop
             Thread orchestratorThread = new Thread(() -> {
                 try {
                     orchestrator.start();
@@ -31,11 +29,9 @@ public class OrchestratorMain {
                 }
             });
             
-            // Set as daemon thread so it doesn't prevent JVM shutdown
             orchestratorThread.setDaemon(true);
             orchestratorThread.start();
             
-            // Add shutdown hook to clean up
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 System.out.println("Stopping Container Orchestrator...");
                 orchestrator.stop();

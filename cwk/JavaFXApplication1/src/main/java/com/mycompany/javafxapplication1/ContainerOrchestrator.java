@@ -38,7 +38,7 @@ public class ContainerOrchestrator {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                 PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true)) {
             
-            // Read the request line
+            // Read request line
             String requestLine = reader.readLine();
             if (requestLine == null) return;
             
@@ -46,7 +46,7 @@ public class ContainerOrchestrator {
             String method = requestParts[0];
             String path = requestParts[1];
             
-            // Read headers until empty line
+            // Read headers 
             int contentLength = 0;
             String line;
             while ((line = reader.readLine()) != null && !line.isEmpty()) {
@@ -55,9 +55,8 @@ public class ContainerOrchestrator {
                 }
             }
             
-            // Handle different endpoints
+            // endpoints
             if (path.equals("/scale") && method.equals("POST")) {
-                // Read the request body
                 char[] body = new char[contentLength];
                 reader.read(body, 0, contentLength);
                 String response = dockerAPI.scaleService(new ByteArrayInputStream(new String(body).getBytes()));
@@ -79,7 +78,6 @@ public class ContainerOrchestrator {
                 writer.println(response);
                 
             } else {
-                // Method not allowed or path not found
                 writer.println("HTTP/1.1 405 Method Not Allowed");
                 writer.println();
             }

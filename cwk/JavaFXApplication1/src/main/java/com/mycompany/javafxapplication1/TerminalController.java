@@ -18,10 +18,8 @@ public class TerminalController {
         terminal = new TerminalEmulator();
         history = new StringBuilder();
         
-        // Show initial prompt
         appendOutput("Terminal Ready\n");
         
-        // Handle command input
         commandInput.setOnKeyPressed(this::handleCommandInput);
     }
     
@@ -29,10 +27,8 @@ public class TerminalController {
         if (event.getCode() == KeyCode.ENTER) {
             String command = commandInput.getText();
             
-            // Show command in output
             appendOutput("> " + command + "\n");
             
-            // Execute command and show result
             if (!command.trim().isEmpty()) {
                 String result = terminal.executeCommand(command);
                 if (!result.isEmpty()) {
@@ -40,7 +36,6 @@ public class TerminalController {
                 }
             }
             
-            // Clear input field
             commandInput.clear();
         }
     }

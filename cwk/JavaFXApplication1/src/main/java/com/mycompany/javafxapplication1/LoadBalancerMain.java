@@ -1,7 +1,6 @@
 package com.mycompany.javafxapplication1;
 
 /**
- * Main entry point for the load balancer container
  * Starts the load balancer service and network server
  */
 public class LoadBalancerMain {
@@ -10,7 +9,6 @@ public class LoadBalancerMain {
         
         LoadBalancer loadBalancer = new LoadBalancer();
         
-        // Add containers using Docker container paths
         loadBalancer.addContainer(new FileStorageContainer("container-1", "/storage/container1"));
         loadBalancer.addContainer(new FileStorageContainer("container-2", "/storage/container2"));
         loadBalancer.addContainer(new FileStorageContainer("container-3", "/storage/container3"));

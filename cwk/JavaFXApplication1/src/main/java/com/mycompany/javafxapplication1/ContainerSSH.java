@@ -14,7 +14,7 @@ public class ContainerSSH {
     private JSch jsch;
     private Session session;
     private ChannelShell channel;
-    private OutputStream commander;         // Changed to OutputStream for sending commands
+    private OutputStream commander;         
     private ByteArrayOutputStream responseStream;
     
     public ContainerSSH() {
@@ -24,10 +24,8 @@ public class ContainerSSH {
     
     public void connect(String containerId, String username, String password) throws JSchException {
         try {
-            // Close existing connections if any
             disconnect();
             
-            // Map container ID to its Docker network alias
             String host = containerId.replace("container-", "storage");
             logger.info("Connecting to " + host + " as " + username);
             
@@ -50,7 +48,7 @@ public class ContainerSSH {
             responseStream = new ByteArrayOutputStream();
             channel.setOutputStream(responseStream);
             try {
-                commander = channel.getOutputStream();  // Get output stream for sending commands
+                commander = channel.getOutputStream(); 
             } catch (IOException ex) {
                 Logger.getLogger(ContainerSSH.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -97,22 +95,18 @@ public class ContainerSSH {
         }
         
         try {
-            // Send command with newline
             commander.write((command + "\n").getBytes());
             commander.flush();
             
-            // Wait for response
-            Thread.sleep(1000);  // Give more time for command execution
+            Thread.sleep(1000);  
             
-            // Get and process response
             String response = responseStream.toString();
             responseStream.reset();
             
-            // Clean up the response by removing command echo and prompt
+            // Clean up response removing command echo and prompt
             String[] lines = response.split("\n");
             StringBuilder cleanResponse = new StringBuilder();
             for (String line : lines) {
-                // Skip the command echo and prompt lines
                 if (!line.trim().equals(command) && !line.matches(".*[@].*[#$]\\s*$")) {
                     cleanResponse.append(line).append("\n");
                 }

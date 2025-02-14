@@ -23,12 +23,9 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 /**
- * Controller for handling file operations in the distributed storage system.
- * Implements file uploads with chunking, downloads with reassembly,
- * and provides user interface feedback.
+ * Controller for handling file operations.
  */
 public class FileOperationsController {
-    // FXML injected controls
     @FXML private TextField fileTextField;
     @FXML private Button uploadBtn;
     @FXML private Button downloadBtn;
@@ -38,13 +35,10 @@ public class FileOperationsController {
     @FXML private TableColumn<FileMetadata, String> fileNameColumn;
     @FXML private TableColumn<FileMetadata, String> ownerColumn;
     @FXML private TableColumn<FileMetadata, String> sizeColumn;
-    @FXML private Label currentUserLabel;
-    @FXML private Label sharedFilesCountLabel;
-
+    @FXML private Button testScalingBtn;//remove
+    
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     
-    
-    // Instance variables
     private Map<String, List<String>> fileContainerMap;
     private LoadBalancerClient loadBalancerClient;
     private Map<String, String> filePathToIdMap;
@@ -64,7 +58,6 @@ public class FileOperationsController {
         initializeUI();
         setupTableColumns();
         refreshFilesList();
-        updateStatusDisplay();
         
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
     }
@@ -82,7 +75,9 @@ public class FileOperationsController {
         
         FileLockManager lockManager = FileLockManager.getInstance();
     }
-
+    
+    
+    
     /**
      * Sets up initial UI state
      */
@@ -90,12 +85,10 @@ public class FileOperationsController {
         fileTextField.setText("No file selected");
         progressBar.setProgress(0.0);
         
-        // Add tooltips for buttons
         uploadBtn.setTooltip(new Tooltip("Upload a new file"));
         downloadBtn.setTooltip(new Tooltip("Download selected file"));
         backBtn.setTooltip(new Tooltip("Return to main menu"));
         
-        // Setup table selection behavior
         filesTable.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         filesTable.setOnMouseClicked(event -> {
             if (event.getClickCount() == 2) {
@@ -125,17 +118,14 @@ public class FileOperationsController {
     }
     
     /**
-     * Sets up the table columns with their cell value factories
+     * Sets up the table columns 
      */
     private void setupTableColumns() {
-        fileNameColumn.setCellValueFactory(data ->
-                new SimpleStringProperty(data.getValue().getFileName()));
+        fileNameColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getFileName()));
         
-        ownerColumn.setCellValueFactory(data ->
-                new SimpleStringProperty(data.getValue().getOwnerUser()));
+        ownerColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getOwnerUser()));
         
-        sizeColumn.setCellValueFactory(data -> {
-            long bytes = data.getValue().getTotalSize();
+        sizeColumn.setCellValueFactory(data -> {long bytes = data.getValue().getTotalSize();
             String readableSize;
             
             if (bytes < 1024) {
@@ -151,7 +141,7 @@ public class FileOperationsController {
         
         
         
-        // context menu for files
+        //  menu 
         filesTable.setRowFactory(tv -> {
             TableRow<FileMetadata> row = new TableRow<>();
             ContextMenu contextMenu = new ContextMenu();
@@ -160,40 +150,43 @@ public class FileOperationsController {
             remoteTerminalItem.setOnAction(event -> openRemoteTerminal());
             
             MenuItem downloadItem = new MenuItem("Download");
-            downloadItem.setOnAction(event -> {
-                FileMetadata file = row.getItem();
+            downloadItem.setOnAction(event -> {FileMetadata file = row.getItem();
                 if (file != null) {
                     initiateDownload(file);
                 }
             });
- 
-            // Share menu item
-            MenuItem shareItem = new MenuItem("Share");
-            shareItem.setOnAction(event -> {
-                FileMetadata file = row.getItem();
+            
+            // Edit 
+            MenuItem editItem = new MenuItem("Edit");
+            editItem.setOnAction(event -> {FileMetadata file = row.getItem();
                 if (file != null) {
-                    // Only allow sharing if user is the owner
+                    openTextEditor(file);
+                }
+            });
+            
+            // Share
+            MenuItem shareItem = new MenuItem("Share");
+            shareItem.setOnAction(event -> {FileMetadata file = row.getItem();
+                if (file != null) {
                     if (file.getOwnerUser().equals(currentUser)) {
                         showShareDialog(file);
                     } else {
-                        showAlert(Alert.AlertType.WARNING, "Access Denied",
-                                "Only the file owner can modify sharing settings");
+                        showAlert(Alert.AlertType.WARNING, "Access Denied","Only the file owner can modify sharing settings");
                     }
                 }
             });
             
-            // Show Access menu item
+            // Show Access 
             MenuItem accessItem = new MenuItem("Show Access");
-            accessItem.setOnAction(event -> {
-                FileMetadata file = row.getItem();
+            accessItem.setOnAction(event -> {FileMetadata file = row.getItem();
                 if (file != null) {
                     showAccessList(file);
                 }
             });
             
+            //DELete
             MenuItem deleteItem = new MenuItem("Delete");
-            deleteItem.setOnAction(event -> {
-                FileMetadata file = row.getItem();
+            deleteItem.setOnAction(event -> {FileMetadata file = row.getItem();
                 if (file != null && confirmDelete(file)) {
                     deleteFile(file);
                 }
@@ -205,16 +198,13 @@ public class FileOperationsController {
                     javafx.beans.binding.Bindings.when(row.emptyProperty())
                             .then((ContextMenu) null)
                             .otherwise(contextMenu)
-            );
-            
-            
-            
+            ); 
             return row;
         });
     }
     
     /**
-     * Refreshes the files list from the database
+     * Refreshes the files list 
      */
     private void refreshFilesList() {
         try {
@@ -227,7 +217,6 @@ public class FileOperationsController {
                     filesTable.getItems().clear();
                     filesTable.getItems().addAll(files);
                     filesTable.refresh();
-                    updateStatusDisplay();
                     System.out.println("Updated table view with " + filesTable.getItems().size() + " items");
                 } catch (Exception e) {
                     System.err.println("Error updating table: " + e.getMessage());
@@ -237,34 +226,28 @@ public class FileOperationsController {
         } catch (ClassNotFoundException e) {
             System.err.println("Failed to load files: " + e.getMessage());
             e.printStackTrace();
-            Platform.runLater(() ->
-                    showAlert(Alert.AlertType.ERROR, "Error", "Failed to load files: " + e.getMessage())
+            Platform.runLater(() ->showAlert(Alert.AlertType.ERROR, "Error", "Failed to load files: " + e.getMessage())
             );
         }
     }
     
     /**
-     * Shows the share dialog for setting file permissions
+     * Shows the share dialog 
      */
     private void showShareDialog(FileMetadata file) {
-        // Create custom dialog
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Share " + file.getFileName());
         dialog.setHeaderText("Choose who to share with and their permissions");
         
-        // Create the dialog content
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 150, 10, 10));
         
-        // Create user dropdown
         ComboBox<String> userComboBox = new ComboBox<>();
         try {
-            // Get all users except the file owner
             ObservableList<User> users = database.getDataFromTable();
-            users.forEach(user -> {
-                if (!user.getUser().equals(file.getOwnerUser())) {
+            users.forEach(user -> {if (!user.getUser().equals(file.getOwnerUser())) {
                     userComboBox.getItems().add(user.getUser());
                 }
             });
@@ -283,28 +266,19 @@ public class FileOperationsController {
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         
-        // Handle the result
         dialog.showAndWait().ifPresent(buttonType -> {
             if (buttonType == ButtonType.OK) {
                 String selectedUser = userComboBox.getValue();
                 if (selectedUser != null) {
                     try {
-                        database.setFilePermissions(
-                                file.getFileId(),
-                                selectedUser,
-                                readPermissionBox.isSelected(),
-                                writePermissionBox.isSelected(),
-                                currentUser  // current user is granting the permissions
-                        );
+                        database.setFilePermissions(file.getFileId(),selectedUser,readPermissionBox.isSelected(),writePermissionBox.isSelected(),currentUser);
                         
-                        showAlert(Alert.AlertType.INFORMATION, "Success",
-                                "File shared successfully");
+                        showAlert(Alert.AlertType.INFORMATION, "Success","File shared successfully");
                         
                         refreshFilesList();
                         
                     } catch (ClassNotFoundException e) {
-                        showAlert(Alert.AlertType.ERROR, "Error",
-                                "Failed to update permissions: " + e.getMessage());
+                        showAlert(Alert.AlertType.ERROR, "Error","Failed to update permissions: " + e.getMessage());
                     }
                 }
             }
@@ -313,10 +287,8 @@ public class FileOperationsController {
     
     private void openTextEditor(FileMetadata file) {
         try {
-            // Check read permission first
             if (!database.checkFilePermission(file.getFileId(), currentUser, "read")) {
-                showAlert(Alert.AlertType.ERROR, "Access Denied",
-                        "You don't have permission to view this file");
+                showAlert(Alert.AlertType.ERROR, "Access Denied","You don't have permission to view this file");
                 return;
             }
             
@@ -331,14 +303,13 @@ public class FileOperationsController {
             editorStage.setTitle("Edit: " + file.getFileName());
             editorStage.setScene(new Scene(root, 800, 600));
             editorStage.show();
-            filesTable.refresh();
             
         } catch (Exception e) {
-            showAlert(Alert.AlertType.ERROR, "Error",
-                    "Failed to open text editor: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Error","Failed to open text editor: " + e.getMessage());
         }
     }
     
+// button to create new text files
     @FXML
     private void createNewTextFile() {
         try {
@@ -352,11 +323,9 @@ public class FileOperationsController {
             editorStage.setTitle("New Text File");
             editorStage.setScene(new Scene(root, 800, 600));
             editorStage.show();
-            filesTable.refresh();
             
         } catch (IOException e) {
-            showAlert(Alert.AlertType.ERROR, "Error",
-                    "Failed to open text editor: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Error","Failed to open text editor: " + e.getMessage());
         }
     }
     
@@ -370,42 +339,35 @@ public class FileOperationsController {
             terminalStage.setTitle("Terminal");
             terminalStage.setScene(new Scene(root, 600, 400));
             
-            // Make terminal window stay on top
             terminalStage.setAlwaysOnTop(true);
             
             terminalStage.show();
             
         } catch (IOException e) {
-            showAlert(Alert.AlertType.ERROR, "Error",
-                    "Failed to open terminal: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Error","Failed to open terminal: " + e.getMessage());
         }
     }
     
     /**
-     * Shows who has access to a file
+     * Shows who has access 
      */
     private void showAccessList(FileMetadata file) {
         try {
             List<Map<String, Object>> accessList = database.getFileAccessList(file.getFileId());
             
-            // Create dialog to show access information
             Dialog<Void> dialog = new Dialog<>();
             dialog.setTitle("Access Information");
             dialog.setHeaderText("Who has access to " + file.getFileName());
             
-            // Create a VBox to hold the access information
             VBox content = new VBox(10);
             content.setPadding(new Insets(10));
             
-            // Add owner information first
             Label ownerLabel = new Label("Owner: " + file.getOwnerUser() + " (full access)");
             ownerLabel.setStyle("-fx-font-weight: bold");
             content.getChildren().add(ownerLabel);
             
-            // Add separator
             content.getChildren().add(new Separator());
             
-            // Add shared access information
             for (Map<String, Object> access : accessList) {
                 if (!access.get("userName").equals(file.getOwnerUser())) {
                     VBox userBox = new VBox(5);
@@ -421,7 +383,6 @@ public class FileOperationsController {
                 }
             }
             
-            // Add scrolling if there are many users
             ScrollPane scrollPane = new ScrollPane(content);
             scrollPane.setFitToWidth(true);
             scrollPane.setPrefHeight(300);
@@ -432,13 +393,12 @@ public class FileOperationsController {
             dialog.showAndWait();
             
         } catch (ClassNotFoundException e) {
-            showAlert(Alert.AlertType.ERROR, "Error",
-                    "Failed to get access information: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Error","Failed to get access information: " + e.getMessage());
         }
     }
     
     /**
-     * Handles file upload button click
+     * Handles file upload button 
      */
     @FXML
     private void uploadBtnHandler(ActionEvent event) {
@@ -500,7 +460,7 @@ public class FileOperationsController {
     }
     
     /**
-     * Handles file download button click
+     * Handles file download button
      */
     @FXML
     private void downloadBtnHandler(ActionEvent event) {
@@ -515,18 +475,16 @@ public class FileOperationsController {
     }
     
     /**
-     * Initiates the file download process
+     * file download process
      */
     private void initiateDownload(FileMetadata metadata) {
         try {
-            // Check download permission
             if (!database.checkFilePermission(metadata.getFileId(), currentUser, "read")) {
                 showAlert(Alert.AlertType.ERROR, "Access Denied",
                         "You don't have permission to download this file");
                 return;
             }
             
-            // Setup file chooser and get save location
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Save File");
             fileChooser.setInitialFileName(metadata.getFileName());
@@ -542,17 +500,13 @@ public class FileOperationsController {
                         downloadAndAssembleFile(metadata.getFileId(), saveFile);
                         
                         if (!operationCancelled) {
-                            Platform.runLater(() -> {
-                                showAlert(Alert.AlertType.INFORMATION, "Success",
-                                        "File downloaded successfully");
+                            Platform.runLater(() -> {showAlert(Alert.AlertType.INFORMATION, "Success","File downloaded successfully");
                                 setControlsEnabled(true);
                                 clearProgress();
                             });
                         }
                     } catch (Exception e) {
-                        Platform.runLater(() -> {
-                            showAlert(Alert.AlertType.ERROR, "Download Error",
-                                    "Failed to download: " + e.getMessage());
+                        Platform.runLater(() -> {showAlert(Alert.AlertType.ERROR, "Download Error","Failed to download: " + e.getMessage());
                             setControlsEnabled(true);
                             clearProgress();
                         });
@@ -560,18 +514,16 @@ public class FileOperationsController {
                 }).start();
             }
         } catch (ClassNotFoundException e) {
-            showAlert(Alert.AlertType.ERROR, "System Error",
-                    "Failed to verify file permissions: " + e.getMessage());
+            showAlert(Alert.AlertType.ERROR, "System Error","Failed to verify file permissions: " + e.getMessage());
         }
     }
     
     /**
-     * Uploads a file in chunks using the load balancer
+     * Uploads file chunks using load balancer
      */
     public void uploadFileInChunks(File file, String fileId) throws IOException {
         FileLockManager lockManager = FileLockManager.getInstance();
         
-        // attempt to acquire lock for upload
         if (!lockManager.lockFile(fileId, "UPLOAD", currentUser)) {
             throw new IOException("File is locked by another operation. Please try again later.");
         }
@@ -588,14 +540,12 @@ public class FileOperationsController {
             List<FileChunker.ChunkInfo> chunks = chunker.splitFile(file, chunkSize);
             System.out.println("Total chunks created: " + chunks.size());
             
-            // Create metadata at start of upload
             FileMetadata metadata = new FileMetadata(fileId, file.getName(), currentUser, file.length());
             metadata.setTotalChunks(chunks.size());
             
             long totalSize = file.length();
             long bytesProcessed = 0;
             
-            // First, process all chunks without delay
             for (FileChunker.ChunkInfo chunk : chunks) {
                 System.out.println("\nProcessing chunk " + chunk.getNumber());
                 if (operationCancelled) {
@@ -604,19 +554,15 @@ public class FileOperationsController {
                 }
                 
                 try {
-                    // Update progress for chunk processing
                     final long finalBytesProcessed = bytesProcessed;
                     Platform.runLater(() -> updateProgress((double)finalBytesProcessed / totalSize * 0.5));
                     
-                    // Upload the encrypted chunk data
                     String containerId = loadBalancerClient.uploadFileChunk(fileId, chunk.getNumber(), chunk.getData());
                     
                     if (containerId != null) {
                         System.out.println("Chunk " + chunk.getNumber() + " stored in container: " + containerId);
                         metadata.addChunkLocation(chunk.getNumber(), containerId);
                         
-                        // Store the encryption key that was used to encrypt this chunk
-                        // Only store key after successful chunk upload
                         database.storeEncryptionKey(fileId, chunk.getNumber(), chunk.getEncryptionKey());
                         System.out.println("Encryption key stored for chunk " + chunk.getNumber());
                         
@@ -628,10 +574,8 @@ public class FileOperationsController {
                 }
             }
             
-            // After all chunks are processed, simulate network delay based on file size
             if (!operationCancelled) {
                 try {
-                    // Determine traffic level based on file size
                     if (totalSize > 10 * 1024 * 1024) { // 10MB
                         NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
                     } else if (totalSize > 5 * 1024 * 1024) { // 5MB
@@ -640,14 +584,12 @@ public class FileOperationsController {
                         NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.LOW);
                     }
                     
-                    // Simulate network delay for the entire file
                     System.out.println("Simulating network delay for complete file transfer...");
                     NetworkSimulator.simulateNetworkDelayWithProgress(
                             "Completing file transfer",
                             progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5))
                     );
                     
-                    // Save metadata after successful transfer
                     database.saveFileMetadata(metadata);
                     System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
                     
@@ -661,7 +603,7 @@ public class FileOperationsController {
         }
     }
     
-    // Helper method to show alerts on the JavaFX Application Thread
+    // Helper method to show alerts 
     protected void showAlert(Alert.AlertType type, String title, String message) {
         if (Platform.isFxApplicationThread()) {
             showAlertImpl(type, title, message);
@@ -670,18 +612,17 @@ public class FileOperationsController {
         }
     }
     
-    // Implementation of alert display
+    // alert display
     private void showAlertImpl(Alert.AlertType type, String title, String message) {
         Alert alert = new Alert(type);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
-        
     }
     
     /**
-     * Downloads and reassembles a file from chunks
+     * Downloads and reassembles file from chunks
      */
     public void downloadAndAssembleFile(String fileId, File outputFile)
             throws IOException, ClassNotFoundException {
@@ -700,7 +641,6 @@ public class FileOperationsController {
                 throw new IOException("File metadata not found");
             }
             
-            // Set traffic level based on file size
             if (metadata.getTotalSize() > 10 * 1024 * 1024) {
                 NetworkSimulator.setTrafficLevel(NetworkSimulator.TrafficLevel.HIGH);
             } else if (metadata.getTotalSize() > 5 * 1024 * 1024) {
@@ -712,7 +652,6 @@ public class FileOperationsController {
             List<FileChunker.ChunkInfo> chunks = new ArrayList<>();
             long bytesProcessed = 0;
             
-            // Initialize checksum
             MessageDigest md;
             try {
                 md = MessageDigest.getInstance("SHA-256");
@@ -720,42 +659,31 @@ public class FileOperationsController {
                 throw new IOException("Failed to initialize checksum", e);
             }
             
-            // First phase (0-50%): Download and verify all chunks
+            // First phase (0-50%)
             for (int chunkNumber = 0; chunkNumber < metadata.getTotalChunks(); chunkNumber++) {
                 if (operationCancelled) break;
                 
                 System.out.println("Requesting chunk " + chunkNumber + " from load balancer...");
                 
                 try {
-                    // Download encrypted chunk
                     byte[] encryptedData = loadBalancerClient.downloadFileChunk(fileId, chunkNumber);
                     System.out.println("Received chunk " + chunkNumber + ", size: " + encryptedData.length);
                     
-                    // Calculate checksum of encrypted data
                     md.reset();
                     md.update(encryptedData);
                     String checksum = Base64.getEncoder().encodeToString(md.digest());
                     
-                    // Get encryption key
                     String encryptionKey = database.getEncryptionKey(fileId, chunkNumber);
                     if (encryptionKey == null) {
                         throw new IOException("Missing encryption key for chunk " + chunkNumber);
                     }
                     System.out.println("Retrieved encryption key for chunk " + chunkNumber);
                     
-                    // Create chunk info
-                    FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(
-                            chunkNumber,
-                            encryptedData.length,
-                            checksum,
-                            encryptionKey,
-                            encryptedData
-                    );
+                    FileChunker.ChunkInfo chunk = new FileChunker.ChunkInfo(chunkNumber,encryptedData.length,checksum,encryptionKey,encryptedData);
                     
                     chunks.add(chunk);
                     bytesProcessed += encryptedData.length;
                     
-                    // Update progress (0-50% range)
                     final double progress = (double) bytesProcessed / metadata.getTotalSize() * 0.5;
                     Platform.runLater(() -> updateProgress(progress));
                     
@@ -764,16 +692,12 @@ public class FileOperationsController {
                 }
             }
             
-            // Second phase (50-100%): Network delay simulation and file assembly
+            // Second phase (50-100%)
             if (!operationCancelled) {
                 try {
                     System.out.println("Simulating network delay for file assembly...");
-                    NetworkSimulator.simulateNetworkDelayWithProgress(
-                            "Assembling file chunks",
-                            progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5))
-                    );
+                    NetworkSimulator.simulateNetworkDelayWithProgress("Assembling file chunks",progress -> Platform.runLater(() -> updateProgress(0.5 + progress * 0.5)));
                     
-                    // Reassemble file using chunks
                     FileChunker chunker = new FileChunker();
                     chunker.reassembleFile(chunks, outputFile);
                     
@@ -791,7 +715,7 @@ public class FileOperationsController {
     }
     
     /**
-     * Returns to the main menu
+     * Return to main menu
      */
     @FXML
     private void backBtnHandler(ActionEvent event) {
@@ -799,7 +723,7 @@ public class FileOperationsController {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("secondary.fxml"));
             Parent root = loader.load();
             SecondaryController controller = loader.getController();
-            controller.initialise(new String[]{currentUser, ""});  // Pass current user
+            controller.initialise(new String[]{currentUser, ""});  
             
             Scene scene = new Scene(root, 640, 480);
             Stage currentStage = (Stage) backBtn.getScene().getWindow();
@@ -816,43 +740,9 @@ public class FileOperationsController {
         }
     }
     
-    /**
-     * Updates the status bar information including current user and shared files count
-     */
-    private void updateStatusDisplay() {
-        // Update current user display
-        if (currentUser != null) {
-            currentUserLabel.setText(currentUser);
-        } else {
-            currentUserLabel.setText("Not logged in");
-        }
-        
-        // Count files shared with current user
-        try {
-            int sharedCount = 0;
-            List<FileMetadata> allFiles = database.getAllFiles();
-            
-            for (FileMetadata file : allFiles) {
-                // Skip files owned by current user
-                if (!file.getOwnerUser().equals(currentUser)) {
-                    // Check if file is shared with current user
-                    if (database.checkFilePermission(file.getFileId(), currentUser, "read")) {
-                        sharedCount++;
-                    }
-                }
-            }
-            
-            sharedFilesCountLabel.setText(String.valueOf(sharedCount));
-            
-        } catch (ClassNotFoundException e) {
-            System.err.println("Error counting shared files: " + e.getMessage());
-            sharedFilesCountLabel.setText("Error");
-        }
-    }
-    
     
     /**
-     * Updates the progress bar
+     * Update progress bar
      */
     protected void updateProgress(double progress) {
         if (Platform.isFxApplicationThread()) {
@@ -863,7 +753,7 @@ public class FileOperationsController {
     }
     
     /**
-     * Enables or disables UI controls during operations
+     * Enables/disables UI controls 
      */
     private void setControlsEnabled(boolean enabled) {
         if (Platform.isFxApplicationThread()) {
@@ -874,7 +764,7 @@ public class FileOperationsController {
     }
     
     /**
-     * Resets the progress bar
+     * Reset progress bar
      */
     protected void clearProgress() {
         if (Platform.isFxApplicationThread()) {
@@ -891,7 +781,7 @@ public class FileOperationsController {
     
     
     /**
-     * Confirms file deletion with user
+     * Confirming file deletion 
      */
     private boolean confirmDelete(FileMetadata file) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
@@ -904,7 +794,7 @@ public class FileOperationsController {
     }
     
     /**
-     * Deletes a file and its chunks from storage
+     * Delete file and chunks from storage
      */
     private void deleteFile(FileMetadata file) {
         setControlsEnabled(false);
@@ -913,21 +803,16 @@ public class FileOperationsController {
             FileLockManager lockManager = FileLockManager.getInstance();
             
             try {
-                // First, attempt to acquire a lock on the file to prevent concurrent access
                 if (!lockManager.lockFile(file.getFileId(), "DELETE", currentUser)) {
                     Platform.runLater(() -> {
                         setControlsEnabled(true);
-                        showAlert(Alert.AlertType.WARNING, "File Locked",
-                                "File is currently in use by another operation. Please try again later.");
-                    });
+                        showAlert(Alert.AlertType.WARNING, "File Locked","File is currently in use by another operation. Please try again later.");});
                     return;
                 }
                 
-                // Delete chunks from containers with progress tracking
                 int totalChunks = file.getTotalChunks();
                 int chunksProcessed = 0;
                 
-                // Iterate through each chunk location and delete from containers
                 for (int i = 0; i < totalChunks; i++) {
                     if (Thread.currentThread().isInterrupted()) {
                         throw new InterruptedException("Delete operation cancelled");
@@ -938,60 +823,46 @@ public class FileOperationsController {
                         System.out.println("Deleting chunk " + i + " from container: " + containerId);
                         
                         try {
-                            // Delete the chunk from the container
                             FileStorageContainer container = getContainerById(containerId);
                             if (container != null) {
                                 String chunkPath = "/storage/" + containerId + "/" + file.getFileId() + "_chunk_" + i;
                                 container.deleteFileChunk(chunkPath);
                             }
                             
-                            // Update progress as each chunk is deleted
                             chunksProcessed++;
                             final double progress = (double) chunksProcessed / totalChunks;
                             Platform.runLater(() -> updateProgress(progress));
                             
                         } catch (Exception e) {
-                            throw new IOException("Failed to delete chunk " + i +
-                                    " from container " + containerId, e);
+                            throw new IOException("Failed to delete chunk " + i +" from container " + containerId, e);
                         }
                     }
                 }
                 
-                // After all chunks are deleted, remove the metadata from database
                 database.deleteFileMetadata(file.getFileId());
                 
-                // Update UI with success message
                 Platform.runLater(() -> {
                     refreshFilesList();
                     setControlsEnabled(true);
                     updateProgress(1.0);
-                    showAlert(Alert.AlertType.INFORMATION, "Success",
-                            "File deleted successfully");
-                });
+                    showAlert(Alert.AlertType.INFORMATION, "Success", "File deleted successfully");});
                 
             } catch (Exception e) {
                 final String errorMessage = e.getMessage();
                 Platform.runLater(() -> {
                     setControlsEnabled(true);
-                    showAlert(Alert.AlertType.ERROR, "Delete Error",
-                            "Failed to delete file: " + errorMessage);
-                });
+                    showAlert(Alert.AlertType.ERROR, "Delete Error","Failed to delete file: " + errorMessage);});
                 
             } finally {
-                // Always release the lock, even if deletion failed
                 lockManager.unlockFile(file.getFileId(), currentUser);
                 System.out.println("Released lock for file: " + file.getFileId());
             }
         }).start();
     }
     
-// Helper method to find container by ID
+//find container by ID
     private FileStorageContainer getContainerById(String containerId) {
-        // This method would need to be implemented to retrieve the appropriate
-        // container instance based on the ID
-        // You might want to maintain a map of containers or retrieve them from
-        // your load balancer
-        return null; // Implement actual container lookup logic
+        return null; 
     }
     
     private void setControlsEnabledImpl(boolean enabled) {
@@ -1001,15 +872,14 @@ public class FileOperationsController {
     }
     
     /**
-     * Sets the current user for file ownership
+     * Set current user file ownership
      */
     public void setCurrentUser(String username) {
         this.currentUser = username;
-        updateStatusDisplay();
     }
     
     /**
-     * Cancels the current operation
+     * Cancel current operation
      */
     public void cancelOperation() {
         operationCancelled = true;

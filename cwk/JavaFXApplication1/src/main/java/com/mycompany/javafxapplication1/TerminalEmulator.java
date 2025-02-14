@@ -14,24 +14,18 @@ public class TerminalEmulator {
         try {
             ProcessBuilder processBuilder = new ProcessBuilder();
             
-            // Set up the command
             if (System.getProperty("os.name").toLowerCase().contains("windows")) {
                 processBuilder.command("cmd.exe", "/c", command);
             } else {
-                // For Linux/Unix systems
                 processBuilder.command("bash", "-c", command);
             }
             
-            // Set working directory
             processBuilder.directory(new File(currentDirectory));
             
-            // Redirect error stream to output stream
             processBuilder.redirectErrorStream(true);
             
-            // Start the process
             Process process = processBuilder.start();
             
-            // Read the output
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
@@ -41,7 +35,7 @@ public class TerminalEmulator {
                 }
             }
             
-            // Wait for the process to complete
+            // Wait fucntion as process is not immediate
             int exitCode = process.waitFor();
             if (exitCode != 0) {
                 return "Command failed with exit code: " + exitCode + "\n" + output.toString();

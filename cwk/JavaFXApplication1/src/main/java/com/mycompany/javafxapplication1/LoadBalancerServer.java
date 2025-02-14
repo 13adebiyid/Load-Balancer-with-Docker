@@ -57,10 +57,8 @@ public class LoadBalancerServer {
                 ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
             
             FileOperation operation = (FileOperation) in.readObject();
-            System.out.println("Received operation: " + operation.getType() + 
-                    " for file: " + operation.getFileId());
+            System.out.println("Received operation: " + operation.getType() +" for file: " + operation.getFileId());
             
-            // Get appropriate container based on operation type
             FileStorageContainer container = loadBalancer.getContainerForFileChunk(
                     operation.getFileId(),
                     operation.getChunkNumber(),
@@ -103,9 +101,7 @@ public class LoadBalancerServer {
             ObjectInputStream in, ObjectOutputStream out)
             throws IOException {
         try {
-            System.out.println("Handling upload for file: " + operation.getFileId() + 
-                    ", chunk: " + operation.getChunkNumber() + 
-                    " to container: " + container.getId());
+            System.out.println("Handling upload for file: " + operation.getFileId() + ", chunk: " + operation.getChunkNumber() + " to container: " + container.getId());
             
             int dataLength = operation.getChunkSize();
             if (dataLength <= 0) {
@@ -116,11 +112,7 @@ public class LoadBalancerServer {
             byte[] data = new byte[dataLength];
             in.readFully(data);
             
-            container.storeFileChunk(
-                    operation.getFileId(),
-                    operation.getChunkNumber(),
-                    data
-            );
+            container.storeFileChunk(operation.getFileId(),operation.getChunkNumber(),data);
             
             out.writeBoolean(true);
             out.flush();
@@ -134,13 +126,9 @@ public class LoadBalancerServer {
         }
     }
     
-    private void handleDownload(FileOperation operation, FileStorageContainer container,
-            ObjectInputStream in, ObjectOutputStream out)
-            throws IOException {
+    private void handleDownload(FileOperation operation, FileStorageContainer container,ObjectInputStream in, ObjectOutputStream out)throws IOException {
         try {
-            System.out.println("Handling download for file: " + operation.getFileId() +
-                    ", chunk: " + operation.getChunkNumber() +
-                    " from container: " + container.getId());
+            System.out.println("Handling download for file: " + operation.getFileId() + ", chunk: " + operation.getChunkNumber() +" from container: " + container.getId());
             
             byte[] data = container.retrieveFileChunk(
                     operation.getFileId(),
@@ -156,8 +144,7 @@ public class LoadBalancerServer {
             out.write(data);
             out.flush();
             
-            System.out.println("Successfully retrieved chunk " + operation.getChunkNumber() +
-                    " (size: " + data.length + " bytes)");
+            System.out.println("Successfully retrieved chunk " + operation.getChunkNumber() +" (size: " + data.length + " bytes)");
             
         } catch (Exception e) {
             System.err.println("Download failed: " + e.getMessage());

@@ -6,8 +6,7 @@ import java.util.logging.Logger;
 import java.util.logging.Level;
 
 /**
- * Simulates network conditions and delays for the distributed file system.
- * Provides latency simulation based on different traffic levels.
+ * Simulates network conditions and delays.
  */
 public class NetworkSimulator {
     private static final Logger logger = Logger.getLogger(NetworkSimulator.class.getName());
@@ -36,7 +35,7 @@ public class NetworkSimulator {
     private static TrafficLevel currentTrafficLevel = TrafficLevel.LOW;
     
     /**
-     * Sets the current traffic level for the system
+     * Sets current traffic level 
      */
     public static void setTrafficLevel(TrafficLevel level) {
         currentTrafficLevel = level;
@@ -44,18 +43,16 @@ public class NetworkSimulator {
     }
     
     /**
-     * Gets the current traffic level
+     * Gets current traffic level
      */
     public static TrafficLevel getCurrentTrafficLevel() {
         return currentTrafficLevel;
     }
     
     /**
-     * Simulates network delay based on current traffic conditions
-     * @param operationType Description of the operation being performed
+     * Simulates network delay based on current traffic
      */
     public static void simulateNetworkDelay(String operationType) throws InterruptedException {
-        // Calculate delay within the range for current traffic level
         int delaySeconds = random.nextInt(currentTrafficLevel.getMaxDelay() - currentTrafficLevel.getMinDelay() + 1) + currentTrafficLevel.getMinDelay();
         
         logger.info(String.format("Simulating network delay for %s: %d seconds (Traffic Level: %s)",
@@ -65,9 +62,7 @@ public class NetworkSimulator {
     }
     
     /**
-     * Simulates network delay with progress updates
-     * @param operationType Description of the operation being performed
-     * @param progressCallback Callback to update progress (0.0 to 1.0)
+     * Simulates network delay with progress update
      */
     public static void simulateNetworkDelayWithProgress(
             String operationType, 
@@ -77,7 +72,6 @@ public class NetworkSimulator {
         
         logger.info(String.format("Simulating network delay for %s: %d seconds (Traffic Level: %s)",operationType, delaySeconds, currentTrafficLevel));
         
-        // Convert to milliseconds for smoother progress updates
         long totalMillis = delaySeconds * 1000L;
         long updateInterval = 100; // Update progress every 100ms
         long startTime = System.currentTimeMillis();
@@ -92,7 +86,7 @@ public class NetworkSimulator {
     }
     
     /**
-     * Functional interface for progress updates
+     * interface for progress updates
      */
     @FunctionalInterface
     public interface ProgressCallback {

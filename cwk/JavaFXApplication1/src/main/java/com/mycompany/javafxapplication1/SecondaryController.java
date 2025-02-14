@@ -42,7 +42,6 @@ public class SecondaryController {
             loader.setLocation(getClass().getResource("file_operations.fxml"));
             Parent root = loader.load();
             
-            // Get controller, set current user
             FileOperationsController controller = loader.getController();
             controller.setCurrentUser(userTextField.getText());
             
@@ -90,17 +89,14 @@ public class SecondaryController {
         myObj = new DB();
         
         try {
-            // Get current user's role
             currentUserRole = myObj.getUserRole(credentials[0]);
             
-            // Setup table columns
             TableColumn<User, String> userCol = new TableColumn<>("Username");
             userCol.setCellValueFactory(new PropertyValueFactory<>("user"));
             
             TableColumn<User, String> roleCol = new TableColumn<>("Role");
             roleCol.setCellValueFactory(new PropertyValueFactory<>("role"));
             
-            // Add context menu for admin actions
             if ("ADMIN".equals(currentUserRole)) {
                 setupAdminContextMenu();
             }
@@ -144,12 +140,7 @@ public class SecondaryController {
             
             contextMenu.getItems().addAll(editItem, resetPasswordItem, deleteItem);
             
-            // Only show context menu for non-admin users
-            row.contextMenuProperty().bind(
-                javafx.beans.binding.Bindings.when(row.emptyProperty())
-                    .then((ContextMenu) null)
-                    .otherwise(contextMenu)
-            );
+            row.contextMenuProperty().bind(javafx.beans.binding.Bindings.when(row.emptyProperty()).then((ContextMenu) null).otherwise(contextMenu));
             
             return row;
         });
@@ -181,7 +172,6 @@ public class SecondaryController {
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
-                // Update user in database
                 myObj.updateUser(user.getUser(), usernameField.getText(), roleCombo.getValue());
                 refreshUserTable();
             } catch (Exception e) {

@@ -13,35 +13,30 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
- * Represents a single storage container in the distributed file system
- * Each container can store file chunks and manage concurrent access
- * @author student
+ * single storage container 
  */
 public class FileStorageContainer {
     private String containerId;
     private String storagePath;
     private AtomicInteger activeConnections;
-    private String containerHost;  // Add this for network communication
+    private String containerHost;  
     private int containerPort;
     
     /**
-     * Constructor - sets up the storage container
-     * @param containerId Unique identifier for this container
-     * @param storagePath Directory path where files will be stored
+     * Constructor setting up storage container
      */
     public FileStorageContainer(String containerId, String storagePath) {
         this.containerId = containerId;
         this.storagePath = storagePath;
-        this.activeConnections = new AtomicInteger(0); // Initialize the AtomicInteger
+        this.activeConnections = new AtomicInteger(0); 
         
-        // Map container IDs to their Docker service names
         this.containerHost = containerId.replace("container-", "storage");
         this.containerPort = 22;
         
         System.out.println("Initializing container " + containerId + " with host: " + containerHost + " and storage path: " + storagePath);
     }
     
-    //REMOVE---------------------------------------
+    //REMOVE---------------------------------------debugg test
     public void incrementActiveConnections() {
         activeConnections.incrementAndGet();
     }
@@ -52,12 +47,8 @@ public class FileStorageContainer {
     
     
     /**
-     * Store a chunk of a file in this container
-     * @param fileId Unique identifier for the file
-     * @param chunkNumber The sequence number of this chunk
-     * @param data The actual chunk data to store
+     * Store chunk of file in container
      */
-    // In FileStorageContainer.java, modify storeFileChunk:
     
     public void storeFileChunk(String fileId, int chunkNumber, byte[] data) throws IOException {
         ChannelSftp sftpChannel = null;
@@ -65,7 +56,6 @@ public class FileStorageContainer {
         
         try {
             JSch jsch = new JSch();
-            // Using root credentials as the container is set up with root ownership
             session = jsch.getSession("root", containerHost, containerPort);
             session.setPassword("root");
             
@@ -79,16 +69,13 @@ public class FileStorageContainer {
             sftpChannel = (ChannelSftp) session.openChannel("sftp");
             sftpChannel.connect();
             
-            // Ensure storage directory exists
             try {
                 sftpChannel.mkdir(storagePath);
                 System.out.println("Created storage directory: " + storagePath);
             } catch (SftpException e) {
-                // Directory might already exist
                 System.out.println("Storage directory exists: " + storagePath);
             }
             
-            // Store the chunk
             String chunkPath = storagePath + "/" + fileId + "_chunk_" + chunkNumber;
             try (ByteArrayInputStream dataStream = new ByteArrayInputStream(data)) {
                 sftpChannel.put(dataStream, chunkPath);
@@ -111,10 +98,7 @@ public class FileStorageContainer {
     }
     
     /**
-     * Retrieve a chunk of a file from this container
-     * @param fileId Unique identifier for the file
-     * @param chunkNumber The sequence number of the chunk to retrieve
-     * @return The chunk data
+     * Retrieve chunk of file from container
      */
     public byte[] retrieveFileChunk(String fileId, int chunkNumber)
             throws IOException, InterruptedException {
@@ -149,8 +133,7 @@ public class FileStorageContainer {
                 System.out.println("DEBUG: File retrieved successfully. Size: " + data.length + " bytes");
             }
             
-            System.out.println("Successfully retrieved chunk " + chunkNumber +
-                    " from container " + containerId);
+            System.out.println("Successfully retrieved chunk " + chunkNumber +" from container " + containerId);
             
             return data;
             
@@ -166,9 +149,7 @@ public class FileStorageContainer {
     }
     
     /**
-     * Deletes a chunk of a file from this container
-     * @param chunkPath The path to the chunk file in the container
-     * @throws IOException if deletion fails
+     * Deletes chunk of file from container
      */
     public void deleteFileChunk(String chunkPath) throws IOException {
         ChannelSftp sftpChannel = null;
@@ -190,7 +171,6 @@ public class FileStorageContainer {
             sftpChannel.connect();
             
             try {
-                // Attempt to delete the chunk file
                 sftpChannel.rm(chunkPath);
                 System.out.println("Successfully deleted chunk: " + chunkPath);
                 
@@ -257,16 +237,14 @@ public class FileStorageContainer {
     }
     
     /**
-     * Get the number of active connections to this container
-     * @return Current number of active connections
+     * Get number of active connections to this container
      */
     public int getActiveConnections() {
         return activeConnections.get();
     }
     
     /**
-     * Get the container's ID
-     * @return Container ID
+     * Get container ID
      */
     public String getId() {
         return containerId;

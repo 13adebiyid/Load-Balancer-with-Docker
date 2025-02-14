@@ -50,7 +50,7 @@ public class DB {
      */
     DB() {
         try {
-            // Handle salt initialization (your existing code)
+            // salt initialization 
             File fp = new File(".salt");
             if (!fp.exists()) {
                 saltValue = this.getSaltvalue(30);
@@ -78,11 +78,6 @@ public class DB {
     
     /**
      * Creates all required database tables for the distributed file storage system.
-     * This includes tables for:
-     * - Users: Storing user authentication information
-     * - Files: Tracking metadata about stored files
-     * - File_chunks: Managing the distribution of file chunks across containers
-     * - Encryption_keys: Storing encryption keys for secure file storage
      */
     public void createTables() throws ClassNotFoundException {
         try {
@@ -94,7 +89,6 @@ public class DB {
             
             connection.setAutoCommit(false);
             
-            // Create users table with role column
             statement.executeUpdate("create table if not exists " + dataBaseTableName +
                     "(id integer primary key autoincrement, name string, password string, role string default 'STANDARD')");
             
@@ -103,81 +97,37 @@ public class DB {
                     " WHERE role = 'ADMIN'");
             
             if (rs.next() && rs.getInt("count") == 0) {
-                // Add admin user using the same connection
                 String adminPass = null;
                 try {
                     adminPass = generateSecurePassword("admin");
                 } catch (InvalidKeySpecException ex) {
                     Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
                 }
-                statement.executeUpdate("INSERT INTO " + dataBaseTableName +
-                        " (name, password, role) VALUES('admin', '" + adminPass + "', 'ADMIN')");
+                statement.executeUpdate("INSERT INTO " + dataBaseTableName + " (name, password, role) VALUES('admin', '" + adminPass + "', 'ADMIN')");
                 System.out.println("Added default admin user");
             }
             
-            statement.executeUpdate(
-                    "CREATE TABLE IF NOT EXISTS sessions (" +
-                            "session_id TEXT PRIMARY KEY," +
-                            "user_name TEXT NOT NULL," +
-                            "login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
-                            "expires_at TIMESTAMP," +
-                            "FOREIGN KEY (user_name) REFERENCES " + dataBaseTableName + "(name)" +
-                                    ")"
-            );
+            statement.executeUpdate("CREATE TABLE IF NOT EXISTS sessions (" + "session_id TEXT PRIMARY KEY," + "user_name TEXT NOT NULL," + "login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP," + "last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP," + "expires_at TIMESTAMP," +
+                            "FOREIGN KEY (user_name) REFERENCES " + dataBaseTableName + "(name)" +")");
             
-            statement.executeUpdate(
-                    "create table if not exists file_permissions (" +
-                            "file_id text," +                       // Links to files table
-                            "user_name text," +                     // User who has permission
-                            "can_read integer default 0," +         // Read permission
-                            "can_write integer default 0," +        // Write permission
-                            "date_granted timestamp default current_timestamp," + // When permission was granted
-                            "granted_by text," +                    // Who granted the permission
-                            "primary key (file_id, user_name)," +
-                            "foreign key (file_id) references files(file_id) on delete cascade" +
-                            ")"
-            );
+            statement.executeUpdate("create table if not exists file_permissions (" +"file_id text," +"user_name text," +"can_read integer default 0," +"can_write integer default 0," +"date_granted timestamp default current_timestamp," + 
+                            "granted_by text," +"primary key (file_id, user_name)," +"foreign key (file_id) references files(file_id) on delete cascade" +")");
             
             
-            // Create files table to track overall file information
-            statement.executeUpdate(
-                    "create table if not exists files (" +
-                            "file_id text primary key," +           // Unique identifier for each file
-                            "file_name text not null," +            // Original name of the file
-                            "owner_user text not null," +           // User who owns this file
-                            "total_size integer not null," +        // Total size in bytes
-                            "total_chunks integer not null," +      // Number of chunks file is split into
-                            "is_shared integer default 0" +         // Whether file is shared
-                            ")"
-            );
+            // Creating table to track file information
+            statement.executeUpdate( "create table if not exists files (" +"file_id text primary key," + "file_name text not null," +   "owner_user text not null," +"total_size integer not null," + "total_chunks integer not null," +      
+                            "is_shared integer default 0" +")");
             
-            // Create file_chunks table to track chunk distribution
-            statement.executeUpdate(
-                    "create table if not exists file_chunks (" +
-                            "file_id text," +                       // Links to files table
-                            "chunk_number integer," +               // Sequence number of chunk
-                            "container_id text not null," +         // Which container stores this chunk
-                            "primary key (file_id, chunk_number)," +
-                            "foreign key (file_id) references files(file_id)" +
-                            ")"
-            );
+            // Creating table to track chunk distribution
+            statement.executeUpdate("create table if not exists file_chunks (" +"file_id text," + "chunk_number integer," +"container_id text not null," + "primary key (file_id, chunk_number)," +
+                            "foreign key (file_id) references files(file_id)" +")");
             
-            // Create encryption_keys table for secure storage
-            statement.executeUpdate(
-                    "create table if not exists encryption_keys (" +
-                            "file_id text," +                       // Links to files table
-                            "chunk_number integer," +               // Which chunk this key is for
-                            "key_string text not null," +           //encryption key
-                            "primary key (file_id, chunk_number)," +
-                            "foreign key (file_id) references files(file_id)" +
-                            ")"
-            );
+            // Creating table for encyrption info
+            statement.executeUpdate("create table if not exists encryption_keys (" +"file_id text," +"chunk_number integer," + "key_string text not null," +"primary key (file_id, chunk_number)," +"foreign key (file_id) references files(file_id)" +")");
             connection.commit();
             System.out.println("Database tables initialized successfully");
             
         } catch (SQLException ex) {
-            // Rollback on error
             try {
                 if (connection != null) {
                     connection.rollback();
@@ -192,7 +142,7 @@ public class DB {
             try {
                 
                 if (connection != null) {
-                    connection.setAutoCommit(true);  // Reset auto-commit
+                    connection.setAutoCommit(true);  
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -202,9 +152,7 @@ public class DB {
     }
     
     /**
-     * Initializes the database for first use or validates existing structure.
-     * This method ensures database persistence while maintaining data integrity.
-     * It creates tables only if they don't exist and validates the database structure.
+     * Initializes database for first use or validates existing.
      */
     public void initializeDatabase() throws ClassNotFoundException {
         try {
@@ -237,13 +185,7 @@ public class DB {
     }
     
     /**
-     * Deletes a file's metadata and associated records from the database
-     * This includes removing entries from:
-     * - files table
-     * - file_chunks table
-     * - encryption_keys table
-     * @param fileId The unique identifier of the file to delete
-     * @throws ClassNotFoundException if the database driver cannot be loaded
+     * Deletes a file's metadata from database
      */
     public void deleteFileMetadata(String fileId) throws ClassNotFoundException {
         try {
@@ -282,7 +224,7 @@ public class DB {
         } finally {
             try {
                 if (connection != null) {
-                    connection.setAutoCommit(true);  // Reset auto-commit mode
+                    connection.setAutoCommit(true);  
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -292,8 +234,7 @@ public class DB {
     }
     
     /**
-     * Retrieves all files from the database
-     * @return List of FileMetadata objects
+     * Retrieves files from database
      */
     public List<FileMetadata> getAllFiles() throws ClassNotFoundException {
         List<FileMetadata> files = new ArrayList<>();
@@ -318,11 +259,7 @@ public class DB {
                 metadata.setShared(rs.getInt("is_shared") == 1);
                 
                 try (Statement chunkStmt = conn.createStatement()) {
-                    ResultSet chunksRs = chunkStmt.executeQuery(
-                            "SELECT chunk_number, container_id FROM file_chunks " +
-                                    "WHERE file_id = '" + metadata.getFileId() + "' " +
-                                            "ORDER BY chunk_number"
-                    );
+                    ResultSet chunksRs = chunkStmt.executeQuery("SELECT chunk_number, container_id FROM file_chunks " +"WHERE file_id = '" + metadata.getFileId() + "' " +"ORDER BY chunk_number");
                     
                     while (chunksRs.next()) {
                         metadata.addChunkLocation(
@@ -352,7 +289,6 @@ public class DB {
     
     /**
      * @brief delete table
-     * @param tableName of type String
      */
     public void delTable(String tableName) throws ClassNotFoundException {
         try {
@@ -375,19 +311,17 @@ public class DB {
     }
     
     /**
-     * @brief add data to the database method
-     * @param user name of type String
-     * @param password of type String
+     * @brief add data to the database 
      */
     public void addDataToDB(String user, String password, String role)
             throws InvalidKeySpecException, ClassNotFoundException {
         Connection conn = null;
         Statement stmt = null;
         try {
-            // Use a single connection
+           
             Class.forName("org.sqlite.JDBC");
             conn = DriverManager.getConnection(fileName);
-            conn.setAutoCommit(false);  // Start transaction
+            conn.setAutoCommit(false); 
             
             stmt = conn.createStatement();
             stmt.setQueryTimeout(timeout);
@@ -399,12 +333,12 @@ public class DB {
                     " (name, password, role) VALUES('" + user + "','" +
                     securePass + "','" + role + "')");
             
-            conn.commit();  // Commit transaction
+            conn.commit(); 
             
         } catch (SQLException ex) {
             try {
                 if (conn != null) {
-                    conn.rollback();  // Rollback on error
+                    conn.rollback();  
                 }
             } catch (SQLException e) {
                 System.err.println("Error rolling back transaction: " + e.getMessage());
@@ -414,7 +348,7 @@ public class DB {
             try {
                 if (stmt != null) stmt.close();
                 if (conn != null) {
-                    conn.setAutoCommit(true);  // Reset auto-commit
+                    conn.setAutoCommit(true);  
                     conn.close();
                 }
             } catch (SQLException e) {
@@ -425,7 +359,6 @@ public class DB {
     
     /**
      * @brief get data from the Database method
-     * @retunr results as ResultSet
      */
     public ObservableList<User> getDataFromTable() throws ClassNotFoundException {
         ObservableList<User> result = FXCollections.observableArrayList();
@@ -455,9 +388,6 @@ public class DB {
     
     /**
      * @brief decode password method
-     * @param user name as type String
-     * @param pass plain password of type String
-     * @return true if the credentials are valid, otherwise false
      */
     public boolean validateUser(String user, String pass) throws InvalidKeySpecException, ClassNotFoundException {
         Boolean flag = false;
@@ -500,7 +430,7 @@ public class DB {
         return new String(finalval);
     }
     
-    /* Method that generates hash value */
+    // Method that generates hash value 
     private byte[] hash(char[] password, byte[] salt) throws InvalidKeySpecException {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keylength);
         Arrays.fill(password, Character.MIN_VALUE);
@@ -526,7 +456,6 @@ public class DB {
     
     /**
      * @brief get table name
-     * @return table name as String
      */
     public String getTableName() {
         return this.dataBaseTableName;
@@ -534,7 +463,6 @@ public class DB {
     
     /**
      * @brief print a message on screen method
-     * @param message of type String
      */
     public void log(String message) {
         System.out.println(message);
@@ -556,14 +484,8 @@ public class DB {
                 String escapedOwnerUser = metadata.getOwnerUser().replace("'", "''");
                 
                 // prepared statement to prevent SQL injection
-                String upsertQuery = "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +
-                        "VALUES (?, ?, ?, ?, ?, ?) " +
-                        "ON CONFLICT(file_id) DO UPDATE SET " +
-                        "file_name = excluded.file_name, " +
-                        "owner_user = excluded.owner_user, " +
-                        "total_size = excluded.total_size, " +
-                        "total_chunks = excluded.total_chunks, " +
-                        "is_shared = excluded.is_shared";
+                String upsertQuery = "INSERT INTO files (file_id, file_name, owner_user, total_size, total_chunks, is_shared) " +"VALUES (?, ?, ?, ?, ?, ?) " +"ON CONFLICT(file_id) DO UPDATE SET " +
+                        "file_name = excluded.file_name, " +"owner_user = excluded.owner_user, " +"total_size = excluded.total_size, " + "total_chunks = excluded.total_chunks, " +"is_shared = excluded.is_shared";
                 
                 try (PreparedStatement pstmt = connection.prepareStatement(upsertQuery)) {
                     pstmt.setString(1, metadata.getFileId());
@@ -575,8 +497,7 @@ public class DB {
                     pstmt.executeUpdate();
                 }
                 
-                String insertChunkSql = "INSERT INTO file_chunks (file_id, chunk_number, container_id) VALUES (?, ?, ?) " +
-                        "ON CONFLICT(file_id, chunk_number) DO UPDATE SET container_id = excluded.container_id";
+                String insertChunkSql = "INSERT INTO file_chunks (file_id, chunk_number, container_id) VALUES (?, ?, ?) " +"ON CONFLICT(file_id, chunk_number) DO UPDATE SET container_id = excluded.container_id";
                 
                 try (PreparedStatement chunkStmt = connection.prepareStatement(insertChunkSql)) {
                     for (int i = 0; i < metadata.getTotalChunks(); i++) {
@@ -594,7 +515,6 @@ public class DB {
                 System.out.println("Successfully saved metadata for file: " + metadata.getFileName());
                 
             } catch (SQLException e) {
-                // If fail, rolls back the entire transaction
                 if (connection != null) {
                     connection.rollback();
                 }
@@ -608,7 +528,7 @@ public class DB {
         } finally {
             try {
                 if (connection != null) {
-                    connection.setAutoCommit(true);  // Reset auto-commit
+                    connection.setAutoCommit(true);  
                     connection.close();
                 }
             } catch (SQLException e) {
@@ -624,9 +544,7 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            ResultSet rs = statement.executeQuery(
-                    "SELECT * FROM files WHERE file_id = '" + fileId + "'"
-            );
+            ResultSet rs = statement.executeQuery("SELECT * FROM files WHERE file_id = '" + fileId + "'");
             
             if (rs.next()) {
                 FileMetadata metadata = new FileMetadata(
@@ -638,10 +556,7 @@ public class DB {
                 
                 metadata.setShared(rs.getInt("is_shared") == 1);
                 
-                ResultSet chunksRs = statement.executeQuery(
-                        "SELECT chunk_number, container_id FROM file_chunks " +
-                                "WHERE file_id = '" + fileId + "' ORDER BY chunk_number"
-                );
+                ResultSet chunksRs = statement.executeQuery("SELECT chunk_number, container_id FROM file_chunks " +"WHERE file_id = '" + fileId + "' ORDER BY chunk_number");
                 
                 while (chunksRs.next()) {
                     metadata.addChunkLocation(
@@ -678,7 +593,6 @@ public class DB {
             statement.setQueryTimeout(timeout);
             
             try {
-                // Use prepared statement for safety
                 String sql = "DELETE FROM encryption_keys WHERE file_id = ?";
                 PreparedStatement pstmt = connection.prepareStatement(sql);
                 pstmt.setString(1, fileId);
@@ -709,7 +623,7 @@ public class DB {
     
     
     /**
-     * Sets or updates permissions for a user on a file
+     * Sets or updates permissions for a user on file
      */
     public void setFilePermissions(String fileId, String userName, boolean canRead,
             boolean canWrite, String grantedBy) throws ClassNotFoundException {
@@ -719,11 +633,7 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            statement.executeUpdate(
-                    "INSERT OR REPLACE INTO file_permissions (file_id, user_name, can_read, can_write, granted_by) " +
-                            "VALUES ('" + fileId + "', '" + userName + "', " +
-                            (canRead ? 1 : 0) + ", " + (canWrite ? 1 : 0) + ", '" + grantedBy + "')"
-            );
+            statement.executeUpdate("INSERT OR REPLACE INTO file_permissions (file_id, user_name, can_read, can_write, granted_by) " +"VALUES ('" + fileId + "', '" + userName + "', " +(canRead ? 1 : 0) + ", " + (canWrite ? 1 : 0) + ", '" + grantedBy + "')");
             
             System.out.println("Updated permissions for user " + userName + " on file " + fileId);
             
@@ -761,7 +671,7 @@ public class DB {
                 return true;
             }
             
-            // Check other permissions
+            // Check permissions
             ResultSet rs = statement.executeQuery(
                     "SELECT can_read, can_write FROM file_permissions " +
                             "WHERE file_id = '" + fileId + "' AND user_name = '" + userName + "'"
@@ -806,11 +716,7 @@ public class DB {
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
-            ResultSet rs = statement.executeQuery(
-                    "SELECT user_name, can_read, can_write, date_granted, granted_by " +
-                            "FROM file_permissions WHERE file_id = '" + fileId + "' " +
-                                    "ORDER BY date_granted DESC"
-            );
+            ResultSet rs = statement.executeQuery("SELECT user_name, can_read, can_write, date_granted, granted_by " +"FROM file_permissions WHERE file_id = '" + fileId + "' " +"ORDER BY date_granted DESC");
             
             while (rs.next()) {
                 Map<String, Object> userAccess = new HashMap<>();
@@ -841,13 +747,12 @@ public class DB {
         try {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection(fileName);
-            connection.setAutoCommit(false);  // Start transaction
+            connection.setAutoCommit(false);  
             
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
             
             try {
-                // Use prepared statement to prevent SQL injection
                 String sql = "INSERT OR REPLACE INTO encryption_keys (file_id, chunk_number, key_string) VALUES (?, ?, ?)";
                 PreparedStatement pstmt = connection.prepareStatement(sql);
                 pstmt.setString(1, fileId);
@@ -916,7 +821,6 @@ public class DB {
                 MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE);
     }
     
-    // Add method to test MySQL connection
     public boolean testMySQLConnection() {
         try {
             Connection conn = DriverManager.getConnection(
@@ -942,7 +846,6 @@ public class DB {
             conn = DriverManager.getConnection(fileName);
             conn.setAutoCommit(false);
             
-            // First check if new username already exists (if changing username)
             if (!oldUsername.equals(newUsername)) {
                 PreparedStatement checkStmt = conn.prepareStatement(
                         "SELECT COUNT(*) FROM " + dataBaseTableName + " WHERE name = ?"
@@ -954,7 +857,6 @@ public class DB {
                 }
             }
             
-            // Update user details
             stmt = conn.prepareStatement(
                     "UPDATE " + dataBaseTableName +
                             " SET name = ?, role = ? WHERE name = ?"
@@ -969,7 +871,6 @@ public class DB {
                 throw new SQLException("User not found: " + oldUsername);
             }
             
-            // Update related records in other tables
             updateRelatedRecords(conn, oldUsername, newUsername);
             
             conn.commit();
@@ -1013,7 +914,6 @@ public class DB {
             conn = DriverManager.getConnection(fileName);
             conn.setAutoCommit(false);
             
-            // Verify user exists
             PreparedStatement checkStmt = conn.prepareStatement(
                     "SELECT COUNT(*) FROM " + dataBaseTableName + " WHERE name = ?"
             );
@@ -1023,11 +923,7 @@ public class DB {
                 throw new SQLException("User not found: " + username);
             }
             
-            // Update password
-            stmt = conn.prepareStatement(
-                    "UPDATE " + dataBaseTableName +
-                            " SET password = ? WHERE name = ?"
-            );
+            stmt = conn.prepareStatement("UPDATE " + dataBaseTableName +" SET password = ? WHERE name = ?");
             
             stmt.setString(1, securePass);
             stmt.setString(2, username);
@@ -1062,7 +958,7 @@ public class DB {
     
     /*
     * Deletes a user and all their associated data
-    * Cannot delete admin users
+    * but cannot delete admin users
     * Only available to admin users
     */
     public void deleteUser(String username) throws ClassNotFoundException {
@@ -1075,9 +971,7 @@ public class DB {
             conn.setAutoCommit(false);
             
             // First check if user exists and is not an admin
-            PreparedStatement checkStmt = conn.prepareStatement(
-                    "SELECT role FROM " + dataBaseTableName + " WHERE name = ?"
-            );
+            PreparedStatement checkStmt = conn.prepareStatement("SELECT role FROM " + dataBaseTableName + " WHERE name = ?");
             checkStmt.setString(1, username);
             ResultSet rs = checkStmt.executeQuery();
             
@@ -1089,27 +983,17 @@ public class DB {
                 throw new SQLException("Cannot delete admin users");
             }
             
-            // Delete user's files first
             deleteUserFiles(conn, username);
             
-            // Delete user's permissions
-            PreparedStatement permStmt = conn.prepareStatement(
-                    "DELETE FROM file_permissions WHERE user_name = ?"
-            );
+            PreparedStatement permStmt = conn.prepareStatement("DELETE FROM file_permissions WHERE user_name = ?");
             permStmt.setString(1, username);
             permStmt.executeUpdate();
             
-            // Delete user's sessions
-            PreparedStatement sessionStmt = conn.prepareStatement(
-                    "DELETE FROM sessions WHERE user_name = ?"
-            );
+            PreparedStatement sessionStmt = conn.prepareStatement("DELETE FROM sessions WHERE user_name = ?");
             sessionStmt.setString(1, username);
             sessionStmt.executeUpdate();
             
-            // Finally, delete the user
-            stmt = conn.prepareStatement(
-                    "DELETE FROM " + dataBaseTableName + " WHERE name = ?"
-            );
+            stmt = conn.prepareStatement("DELETE FROM " + dataBaseTableName + " WHERE name = ?");
             stmt.setString(1, username);
             int deleted = stmt.executeUpdate();
             
@@ -1147,43 +1031,27 @@ public class DB {
     * Deletes all files owned by a user
     */
     private void deleteUserFiles(Connection conn, String username) throws SQLException {
-        // Get all file IDs owned by the user
-        PreparedStatement fileStmt = conn.prepareStatement(
-                "SELECT file_id FROM files WHERE owner_user = ?"
-        );
+        PreparedStatement fileStmt = conn.prepareStatement("SELECT file_id FROM files WHERE owner_user = ?");
         fileStmt.setString(1, username);
         ResultSet rs = fileStmt.executeQuery();
         
-        // Delete each file's related records
         while (rs.next()) {
             String fileId = rs.getString("file_id");
             
-            // Delete file chunks
-            PreparedStatement chunkStmt = conn.prepareStatement(
-                    "DELETE FROM file_chunks WHERE file_id = ?"
-            );
+            PreparedStatement chunkStmt = conn.prepareStatement("DELETE FROM file_chunks WHERE file_id = ?");
             chunkStmt.setString(1, fileId);
             chunkStmt.executeUpdate();
             
-            // Delete encryption keys
-            PreparedStatement keyStmt = conn.prepareStatement(
-                    "DELETE FROM encryption_keys WHERE file_id = ?"
-            );
+            PreparedStatement keyStmt = conn.prepareStatement("DELETE FROM encryption_keys WHERE file_id = ?");
             keyStmt.setString(1, fileId);
             keyStmt.executeUpdate();
             
-            // Delete permissions
-            PreparedStatement permStmt = conn.prepareStatement(
-                    "DELETE FROM file_permissions WHERE file_id = ?"
-            );
+            PreparedStatement permStmt = conn.prepareStatement("DELETE FROM file_permissions WHERE file_id = ?");
             permStmt.setString(1, fileId);
             permStmt.executeUpdate();
         }
         
-        // Delete the files themselves
-        PreparedStatement deleteFilesStmt = conn.prepareStatement(
-                "DELETE FROM files WHERE owner_user = ?"
-        );
+        PreparedStatement deleteFilesStmt = conn.prepareStatement("DELETE FROM files WHERE owner_user = ?");
         deleteFilesStmt.setString(1, username);
         deleteFilesStmt.executeUpdate();
     }
@@ -1192,26 +1060,17 @@ public class DB {
     * Updates all related records when a username changes
     */
     private void updateRelatedRecords(Connection conn, String oldUsername, String newUsername) throws SQLException {
-        // Update file ownership
-        PreparedStatement fileStmt = conn.prepareStatement(
-                "UPDATE files SET owner_user = ? WHERE owner_user = ?"
-        );
+        PreparedStatement fileStmt = conn.prepareStatement("UPDATE files SET owner_user = ? WHERE owner_user = ?");
         fileStmt.setString(1, newUsername);
         fileStmt.setString(2, oldUsername);
         fileStmt.executeUpdate();
         
-        // Update file permissions
-        PreparedStatement permStmt = conn.prepareStatement(
-                "UPDATE file_permissions SET user_name = ? WHERE user_name = ?"
-        );
+        PreparedStatement permStmt = conn.prepareStatement("UPDATE file_permissions SET user_name = ? WHERE user_name = ?");
         permStmt.setString(1, newUsername);
         permStmt.setString(2, oldUsername);
         permStmt.executeUpdate();
         
-        // Update session records
-        PreparedStatement sessionStmt = conn.prepareStatement(
-                "UPDATE sessions SET user_name = ? WHERE user_name = ?"
-        );
+        PreparedStatement sessionStmt = conn.prepareStatement("UPDATE sessions SET user_name = ? WHERE user_name = ?");
         sessionStmt.setString(1, newUsername);
         sessionStmt.setString(2, oldUsername);
         sessionStmt.executeUpdate();
@@ -1223,8 +1082,7 @@ public class DB {
             connection = DriverManager.getConnection(fileName);
             var statement = connection.createStatement();
             statement.setQueryTimeout(timeout);
-            ResultSet rs = statement.executeQuery("SELECT role FROM " + dataBaseTableName +
-                    " WHERE name = '" + username + "'");
+            ResultSet rs = statement.executeQuery("SELECT role FROM " + dataBaseTableName +" WHERE name = '" + username + "'");
             if (rs.next()) {
                 return rs.getString("role");
             }
@@ -1250,11 +1108,7 @@ public class DB {
             statement.setQueryTimeout(timeout);
             
             String sessionId = UUID.randomUUID().toString();
-            statement.executeUpdate(
-                    "INSERT INTO sessions (session_id, user_name, expires_at) " +
-                            "VALUES ('" + sessionId + "', '" + userName + "', " +
-                                    "datetime('now', '+24 hours'))"
-            );
+            statement.executeUpdate("INSERT INTO sessions (session_id, user_name, expires_at) " +"VALUES ('" + sessionId + "', '" + userName + "', " +"datetime('now', '+24 hours'))");
             
         } finally {
             if (connection != null) {
