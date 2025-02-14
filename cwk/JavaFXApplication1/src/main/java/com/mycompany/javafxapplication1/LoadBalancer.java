@@ -20,9 +20,6 @@ public class LoadBalancer {
     private final ScheduledExecutorService healthCheckExecutor;
     private static final int HEALTH_CHECK_INTERVAL = 300;
     private DB database;
-    private static final String ORCHESTRATOR_HOST = "host.docker.internal";
-    private static final int ORCHESTRATOR_PORT = 8081;
-
     
     private static final int MIN_CONTAINERS = 4;
     private static final int MAX_CONTAINERS = 10;
@@ -67,15 +64,13 @@ public class LoadBalancer {
         containers = new ArrayList<>();
         containerStatus = new HashMap<>();
         containerPriorities = new HashMap<>();
-        containerMetrics = new HashMap<>();
+//        containerMetrics = new HashMap<>();
+        
         currentContainerIndex = 0;
         currentAlgorithm = "RoundRobin";
-        
         this.healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
         this.database = new DB();
         this.dockerManager = new DockerContainerManager();
-        
-        initializeContainers();
         startHealthChecks();
         startScalingMonitor();
     }
@@ -88,28 +83,6 @@ public class LoadBalancer {
             CHECK_SCALING_INTERVAL, 
             TimeUnit.SECONDS
         );
-    }
-    
-    private void initializeContainers() {
-        try {
-            // Get current container count from orchestrator
-            int containerCount = dockerManager.getCurrentContainerCount();
-            System.out.println("Initializing with " + containerCount + " containers");
-            
-            if (containerCount > 0) {
-                for (int i = 1; i <= containerCount; i++) {
-                    String containerId = "container-" + i;
-                    FileStorageContainer container = new FileStorageContainer(containerId, "/storage/" + containerId);
-                    addContainer(container);
-                    System.out.println("Added container: " + containerId);
-                }
-            } else {
-                System.err.println("Warning: No containers found during initialization");
-            }
-        } catch (Exception e) {
-            System.err.println("Error initializing containers: " + e.getMessage());
-            e.printStackTrace();
-        }
     }
     
 //     Method to check if scaling is needed
