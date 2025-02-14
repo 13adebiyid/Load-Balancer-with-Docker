@@ -78,7 +78,7 @@ public class MySQLDB {
             
             syncUsers();
             syncFiles();
-            syncFilePermissions();
+      
             
             mysqlConnection.commit();
             logger.info("Database synchronization completed successfully");
@@ -157,13 +157,7 @@ public class MySQLDB {
         }
     }
     
-    /**
-     * Synchronizes file permissions between databases
-     */
-    private void syncFilePermissions() throws SQLException {
-        //  complete...
-    }
-    
+   
     /**
      * Closes database connections and stops sync scheduler
      */
