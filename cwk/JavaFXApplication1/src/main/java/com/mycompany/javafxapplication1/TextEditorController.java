@@ -26,12 +26,10 @@ public class TextEditorController {
         fileOps = new FileOperationsController() {
             @Override
             protected void updateProgress(double progress) {
-                // No progress updates needed
             }
             
             @Override
             protected void clearProgress() {
-                // No progress clearing needed
             }
             
             @Override

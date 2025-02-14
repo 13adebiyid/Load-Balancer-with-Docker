@@ -38,8 +38,9 @@ public class FileOperationsController {
     @FXML private TableColumn<FileMetadata, String> fileNameColumn;
     @FXML private TableColumn<FileMetadata, String> ownerColumn;
     @FXML private TableColumn<FileMetadata, String> sizeColumn;
-    @FXML private Button testScalingBtn;//remove
-    // Constants
+    @FXML private Label currentUserLabel;
+    @FXML private Label sharedFilesCountLabel;
+
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     
     
@@ -63,6 +64,7 @@ public class FileOperationsController {
         initializeUI();
         setupTableColumns();
         refreshFilesList();
+        updateStatusDisplay();
         
         loadBalancerClient = new LoadBalancerClient("localhost", 8080);
     }
@@ -164,16 +166,7 @@ public class FileOperationsController {
                     initiateDownload(file);
                 }
             });
-            
-            // Edit menu item
-            MenuItem editItem = new MenuItem("Edit");
-            editItem.setOnAction(event -> {
-                FileMetadata file = row.getItem();
-                if (file != null) {
-                    openTextEditor(file);
-                }
-            });
-            
+ 
             // Share menu item
             MenuItem shareItem = new MenuItem("Share");
             shareItem.setOnAction(event -> {
@@ -234,6 +227,7 @@ public class FileOperationsController {
                     filesTable.getItems().clear();
                     filesTable.getItems().addAll(files);
                     filesTable.refresh();
+                    updateStatusDisplay();
                     System.out.println("Updated table view with " + filesTable.getItems().size() + " items");
                 } catch (Exception e) {
                     System.err.println("Error updating table: " + e.getMessage());
@@ -337,6 +331,7 @@ public class FileOperationsController {
             editorStage.setTitle("Edit: " + file.getFileName());
             editorStage.setScene(new Scene(root, 800, 600));
             editorStage.show();
+            filesTable.refresh();
             
         } catch (Exception e) {
             showAlert(Alert.AlertType.ERROR, "Error",
@@ -344,7 +339,6 @@ public class FileOperationsController {
         }
     }
     
-// Add a button to create new text files
     @FXML
     private void createNewTextFile() {
         try {
@@ -358,6 +352,7 @@ public class FileOperationsController {
             editorStage.setTitle("New Text File");
             editorStage.setScene(new Scene(root, 800, 600));
             editorStage.show();
+            filesTable.refresh();
             
         } catch (IOException e) {
             showAlert(Alert.AlertType.ERROR, "Error",
@@ -682,6 +677,7 @@ public class FileOperationsController {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+        
     }
     
     /**
@@ -817,6 +813,40 @@ public class FileOperationsController {
             showAlert(Alert.AlertType.ERROR, "Navigation Error",
                     "Failed to return to main menu: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Updates the status bar information including current user and shared files count
+     */
+    private void updateStatusDisplay() {
+        // Update current user display
+        if (currentUser != null) {
+            currentUserLabel.setText(currentUser);
+        } else {
+            currentUserLabel.setText("Not logged in");
+        }
+        
+        // Count files shared with current user
+        try {
+            int sharedCount = 0;
+            List<FileMetadata> allFiles = database.getAllFiles();
+            
+            for (FileMetadata file : allFiles) {
+                // Skip files owned by current user
+                if (!file.getOwnerUser().equals(currentUser)) {
+                    // Check if file is shared with current user
+                    if (database.checkFilePermission(file.getFileId(), currentUser, "read")) {
+                        sharedCount++;
+                    }
+                }
+            }
+            
+            sharedFilesCountLabel.setText(String.valueOf(sharedCount));
+            
+        } catch (ClassNotFoundException e) {
+            System.err.println("Error counting shared files: " + e.getMessage());
+            sharedFilesCountLabel.setText("Error");
         }
     }
     
@@ -975,6 +1005,7 @@ public class FileOperationsController {
      */
     public void setCurrentUser(String username) {
         this.currentUser = username;
+        updateStatusDisplay();
     }
     
     /**

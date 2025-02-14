@@ -48,9 +48,7 @@
             <Button fx:id="terminalBtn" onAction="#openTerminal" prefHeight="26.0" prefWidth="214.0" text="Terminal" GridPane.columnIndex="3" GridPane.rowIndex="1" />
             
             <Button fx:id="remoteTerminalBtn" onAction="#openRemoteTerminal" prefHeight="26.0" prefWidth="205.0" text="Remote Terminal" GridPane.columnIndex="3" GridPane.rowIndex="2" />
-            
-            <Button fx:id="testScalingBtn" onAction="#testScalingHandler" prefHeight="26.0" prefWidth="192.0" text="Test Scaling" GridPane.columnIndex="2" GridPane.rowIndex="3" />
-            
+                        
             <Button onAction="#createNewTextFile" prefHeight="26.0" prefWidth="227.0" text="Create Text File" GridPane.columnIndex="2" GridPane.rowIndex="1" />
             
             <!-- Progress Indicator -->
