@@ -5,10 +5,32 @@ package com.mycompany.javafxapplication1;
  */
 public class ScalingTest {
     private LoadBalancer loadBalancer;
+    private static final int CONTAINER_INIT_TIMEOUT = 30;
     
     public ScalingTest() {
-        // Initialize the load balancer as it would be in production
+        // Initialize the load balancer
         this.loadBalancer = new LoadBalancer();
+        waitForContainerInitialization();
+    }
+    
+    private void waitForContainerInitialization() {
+        System.out.println("Waiting for containers to initialize...");
+        int attempts = CONTAINER_INIT_TIMEOUT;
+        while (attempts > 0 && loadBalancer.getContainerCount() == 0) {
+            try {
+                Thread.sleep(1000);
+                attempts--;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        if (loadBalancer.getContainerCount() == 0) {
+            System.err.println("Failed to initialize containers after " + CONTAINER_INIT_TIMEOUT + " seconds");
+        } else {
+            System.out.println("Successfully initialized with " + loadBalancer.getContainerCount() + " containers");
+        }
     }
     
     /**
@@ -16,6 +38,11 @@ public class ScalingTest {
      */
     public void runScalingTest() {
         System.out.println("\n=== Starting Scaling Test ===");
+        
+        if (loadBalancer.getContainerCount() == 0) {
+            System.err.println("Cannot run test - no containers available");
+            return;
+        }
         
         try {
             // First, simulate normal load to establish baseline
@@ -41,7 +68,6 @@ public class ScalingTest {
         } catch (InterruptedException e) {
             System.err.println("Test interrupted: " + e.getMessage());
         } finally {
-            // Clean up
             loadBalancer.shutdown();
         }
         
@@ -53,23 +79,17 @@ public class ScalingTest {
      * @param loadPercentage Desired load level (0-100)
      */
     private void simulateLoad(int loadPercentage) {
-        // Calculate number of connections needed for desired load
         int totalContainers = loadBalancer.getContainerCount();
         if (totalContainers == 0) {
             System.out.println("No containers available for load simulation");
             return;
         }
         
-        // Each container can handle 10 connections at 100% load
         int connectionsPerContainer = (int)((loadPercentage / 100.0) * 10);
         int totalConnections = connectionsPerContainer * totalContainers;
         
-        System.out.println(String.format(
-            "Simulating %d%% load (%d connections across %d containers)",
-            loadPercentage, totalConnections, totalContainers
-        ));
+        System.out.println(String.format("Simulating %d%% load (%d connections across %d containers)",loadPercentage, totalConnections, totalContainers));
         
-        // Add the connections to containers
         for (FileStorageContainer container : loadBalancer.getContainers()) {
             // Reset existing connections
             while (container.getActiveConnections() > 0) {
@@ -81,10 +101,7 @@ public class ScalingTest {
                 container.incrementActiveConnections();
             }
             
-            System.out.println(String.format(
-                "Container %s: %d active connections",
-                container.getId(), container.getActiveConnections()
-            ));
+            System.out.println(String.format("Container %s: %d active connections",container.getId(), container.getActiveConnections()));
         }
     }
     
