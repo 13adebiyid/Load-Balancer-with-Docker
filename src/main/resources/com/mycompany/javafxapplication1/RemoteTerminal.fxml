@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox spacing="10" xmlns="http://javafx.com/javafx/22" xmlns:fx="http://javafx.com/fxml/1" 
+      fx:controller="com.mycompany.javafxapplication1.RemoteTerminalController">
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+    
+    <!-- Container Selection -->
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Label text="Container:"/>
+        <ComboBox fx:id="containerComboBox" prefWidth="150"/>
+        <Button fx:id="connectButton" text="Connect" onAction="#handleConnect"/>
+        <Label fx:id="statusLabel" text="Not Connected"/>
+    </HBox>
+    
+    <!-- Terminal Output -->
+    <TextArea fx:id="outputArea" 
+              editable="false" 
+              wrapText="true" 
+              VBox.vgrow="ALWAYS"
+              style="-fx-font-family: 'monospace'; -fx-text-fill: white; -fx-control-inner-background: #2d2d2d;"/>
+              
+    <!-- Command Input -->
+    <HBox spacing="5" alignment="CENTER_LEFT">
+        <Label text=">" 
+               style="-fx-font-family: 'monospace'; -fx-text-fill: #00ff00;"/>
+        <TextField fx:id="commandInput" 
+                   HBox.hgrow="ALWAYS"
+                   style="-fx-font-family: 'monospace';"
+                   disable="true"/>
+    </HBox>
+    
+    <!-- Quick Commands -->
+    <HBox spacing="10">
+        <Button text="System Info" onAction="#showSystemInfo"/>
+        <Button text="List Files" onAction="#listFiles"/>
+        <Button text="Process List" onAction="#showProcesses"/>
+        <Button text="Disk Usage" onAction="#showDiskUsage"/>
+    </HBox>
+</VBox>

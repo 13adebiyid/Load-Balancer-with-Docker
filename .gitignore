@@ -1,0 +1,19 @@
+# Maven build output
+target/
+dependency-reduced-pom.xml
+
+# Runtime database and credentials
+*.db
+.salt
+
+# IDE / editor artifacts
+*.swp
+*.swo
+.idea/
+*.iml
+.vscode/
+nbproject/private/
+
+# OS
+.DS_Store
+Thumbs.db
